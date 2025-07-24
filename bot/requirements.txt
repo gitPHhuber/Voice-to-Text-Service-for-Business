@@ -1,0 +1,3 @@
+python-telegram-bot[ext]
+python-dotenv
+httpx
