@@ -20,7 +20,6 @@ COPY app/ /app/app/
 
 # Copy backend code
 COPY backend/ /app/backend/
-COPY backend/processing_scripts/ /app/processing_scripts/
 
 # Create data dirs
 RUN mkdir -p /data/uploads /data/outputs /data/voice_samples
