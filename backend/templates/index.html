@@ -5,300 +5,673 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ASVO-Transcriber</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-       background: #0a0f1a; color: #e0e0e0; min-height: 100vh;
-       display: flex; justify-content: center; align-items: center; }
-.container { max-width: 600px; width: 100%; padding: 2rem; }
-h1 { color: #38bdf8; margin-bottom: 0.5rem; font-size: 1.8rem; }
-.subtitle { color: #666; margin-bottom: 2rem; }
-.upload-zone { border: 2px dashed #334155; border-radius: 12px;
-               padding: 3rem 2rem; text-align: center; cursor: pointer;
-               transition: all 0.3s; margin-bottom: 1.5rem; }
-.upload-zone:hover { border-color: #38bdf8; background: #0d1520; }
-.upload-zone.dragover { border-color: #38bdf8; background: #111d2b; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #2d2d3f;
+  --shadow-dark: #1a1a2e;
+  --shadow-light: #3d3d55;
+  --accent-1: #7c6cf0;
+  --accent-2: #9d8ff7;
+  --text: #e0e0ef;
+  --text-dim: #8888a8;
+  --radius-card: 20px;
+  --radius-btn: 14px;
+  --radius-input: 12px;
+  --neu-outset: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+  --neu-inset: inset 4px 4px 10px var(--shadow-dark), inset -4px -4px 10px var(--shadow-light);
+  --neu-outset-sm: 3px 3px 8px var(--shadow-dark), -3px -3px 8px var(--shadow-light);
+}
+
+body {
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.container {
+  max-width: 640px;
+  width: 100%;
+}
+
+/* --- Header --- */
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.header .subtitle {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin-top: 0.35rem;
+}
+
+/* --- Nav links --- */
+.nav-links {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.nav-links a {
+  color: var(--accent-2);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: var(--radius-input);
+  box-shadow: var(--neu-outset-sm);
+  transition: all 0.2s;
+}
+
+.nav-links a:hover {
+  box-shadow: var(--neu-inset);
+  color: #fff;
+}
+
+/* --- Upload card --- */
+.card {
+  background: var(--bg);
+  border-radius: var(--radius-card);
+  box-shadow: var(--neu-outset);
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.upload-zone {
+  border: 2px dashed #4a4a64;
+  border-radius: var(--radius-card);
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: var(--neu-inset);
+}
+
+.upload-zone:hover {
+  border-color: var(--accent-1);
+}
+
+.upload-zone.dragover {
+  border-color: var(--accent-2);
+  background: rgba(124, 108, 240, 0.06);
+}
+
+.upload-zone .icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.upload-zone .label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.upload-zone .hint {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-top: 0.5rem;
+}
+
 input[type="file"] { display: none; }
-.btn { background: #38bdf8; color: #0a0f1a; border: none; padding: 12px 24px;
-       border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;
-       width: 100%; transition: opacity 0.2s; }
-.btn:hover { opacity: 0.9; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.options { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
-           margin-bottom: 1.5rem; }
-.option { display: flex; align-items: center; gap: 0.5rem; }
-.option input { accent-color: #38bdf8; }
-.status { margin-top: 1.5rem; padding: 1rem; border-radius: 8px;
-          background: #111d2b; display: none; }
-.status.show { display: block; }
-.status.error { border-left: 3px solid #ef4444; }
-.status.success { border-left: 3px solid #22c55e; }
-.status.pending { border-left: 3px solid #38bdf8; }
-a { color: #38bdf8; }
-.files { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.files a { display: block; padding: 8px 12px; background: #1e293b;
-           border-radius: 6px; text-decoration: none; }
-.files a:hover { background: #334155; }
-.progress-wrap { background: #1e293b; border-radius: 8px; height: 28px;
-                 margin: 0.75rem 0; overflow: hidden; position: relative; }
-.progress-bar { height: 100%; background: linear-gradient(90deg, #0ea5e9, #38bdf8);
-                border-radius: 8px; transition: width 0.5s ease;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 0.8rem; font-weight: 600; color: #0a0f1a;
-                min-width: 2.5rem; }
-.step-label { color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem; }
-.steps { display: flex; gap: 0.25rem; margin: 0.75rem 0; }
-.steps .dot { width: 8px; height: 8px; border-radius: 50%; background: #334155;
-              transition: background 0.3s; }
-.steps .dot.active { background: #38bdf8; }
-.steps .dot.done { background: #22c55e; }
+
+/* --- File list --- */
+.file-list {
+  margin-top: 1rem;
+  font-size: 0.88rem;
+  color: var(--accent-2);
+  line-height: 1.7;
+}
+
+/* --- Options grid --- */
+.options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* --- Neumorphic select --- */
+.neu-select {
+  position: relative;
+  width: 100%;
+}
+
+.neu-select select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--bg);
+  color: var(--text);
+  border: none;
+  border-radius: var(--radius-input);
+  padding: 12px 36px 12px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  box-shadow: var(--neu-inset);
+  cursor: pointer;
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+.neu-select select:focus {
+  box-shadow: var(--neu-inset), 0 0 0 2px var(--accent-1);
+}
+
+.neu-select::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--text-dim);
+  pointer-events: none;
+}
+
+/* --- Neumorphic checkbox --- */
+.neu-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: var(--radius-input);
+  box-shadow: var(--neu-inset);
+  user-select: none;
+  transition: box-shadow 0.2s;
+  font-size: 0.9rem;
+}
+
+.neu-check:hover {
+  box-shadow: var(--neu-inset), 0 0 0 1px var(--accent-1);
+}
+
+.neu-check input[type="checkbox"] {
+  display: none;
+}
+
+.neu-check .checkmark {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--neu-outset-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.25s;
+}
+
+.neu-check input:checked + .checkmark {
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  box-shadow: 0 0 12px rgba(124, 108, 240, 0.4);
+}
+
+.neu-check input:checked + .checkmark::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+/* --- Submit button --- */
+.btn-submit {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 16px 24px;
+  border: none;
+  border-radius: var(--radius-btn);
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  box-shadow: var(--neu-outset), 0 4px 20px rgba(124, 108, 240, 0.25);
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.btn-submit:hover {
+  box-shadow: var(--neu-outset), 0 6px 28px rgba(124, 108, 240, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-submit:active {
+  box-shadow: var(--neu-inset);
+  transform: translateY(0);
+}
+
+.btn-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--neu-outset-sm);
+}
+
+/* --- Tasks area --- */
+#tasksArea {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.task-card {
+  background: var(--bg);
+  border-radius: var(--radius-card);
+  box-shadow: var(--neu-outset);
+  padding: 1.25rem 1.5rem;
+  transition: box-shadow 0.3s;
+}
+
+.task-card.error {
+  box-shadow: var(--neu-outset), inset 3px 0 0 #ef4444;
+}
+
+.task-card.success {
+  box-shadow: var(--neu-outset), inset 3px 0 0 #22c55e;
+}
+
+.task-card.pending {
+  box-shadow: var(--neu-outset), inset 3px 0 0 var(--accent-1);
+}
+
+.task-card .task-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+.task-card .task-msg {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* --- Progress bar --- */
+.progress-wrap {
+  background: var(--bg);
+  border-radius: 10px;
+  height: 28px;
+  margin: 0.75rem 0;
+  overflow: hidden;
+  box-shadow: var(--neu-inset);
+  position: relative;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  border-radius: 10px;
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  min-width: 2.5rem;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* --- Step dots --- */
+.steps {
+  display: flex;
+  gap: 8px;
+  margin: 0.75rem 0;
+  align-items: center;
+}
+
+.steps .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #3a3a52;
+  box-shadow: var(--neu-outset-sm);
+  transition: all 0.3s;
+}
+
+.steps .dot.active {
+  background: var(--accent-1);
+  box-shadow: 0 0 10px var(--accent-1), 0 0 20px rgba(124, 108, 240, 0.3);
+}
+
+.steps .dot.done {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.step-label {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+}
+
+.step-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+/* --- Cancel button --- */
+.btn-cancel {
+  background: var(--bg);
+  color: #ef4444;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: var(--neu-outset-sm);
+  transition: all 0.15s;
+  margin-top: 0.5rem;
+}
+
+.btn-cancel:hover {
+  box-shadow: var(--neu-inset);
+}
+
+/* --- Result links --- */
+.result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.result-links a {
+  text-decoration: none;
+  padding: 10px 18px;
+  border-radius: var(--radius-input);
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.15s;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: var(--neu-outset-sm);
+}
+
+.result-links a:hover {
+  box-shadow: var(--neu-inset);
+}
+
+.result-links a.primary {
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  color: #fff;
+  box-shadow: var(--neu-outset-sm), 0 2px 12px rgba(124, 108, 240, 0.3);
+}
+
+.result-links a.primary:hover {
+  box-shadow: var(--neu-inset), 0 0 8px rgba(124, 108, 240, 0.2);
+}
+
+/* --- Responsive --- */
+@media (max-width: 500px) {
+  .options-grid { grid-template-columns: 1fr; }
+  .nav-links { flex-direction: column; align-items: center; gap: 0.75rem; }
+  .result-links { flex-direction: column; }
+  .result-links a { text-align: center; }
+}
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>ASVO-Transcriber</h1>
-  <p class="subtitle">Транскрибация и диаризация аудио/видео</p>
-  <div style="margin-bottom:1rem;display:flex;gap:1.5rem;">
-    <a href="/live" style="color:#38bdf8;font-size:0.9rem;">🎙 Живая транскрибация →</a>
-    <a href="/history" style="color:#38bdf8;font-size:0.9rem;">📚 История →</a>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>ASVO-Transcriber</h1>
+    <p class="subtitle">Транскрибация и диаризация аудио/видео</p>
   </div>
-  <div class="upload-zone" id="dropZone" onclick="fileInput.click()">
-    <p style="font-size:2rem;margin-bottom:0.5rem;">📁</p>
-    <p>Перетащи файлы сюда или нажми для выбора</p>
-    <p style="color:#666;margin-top:0.5rem;font-size:0.85rem;">
-      mp3, wav, ogg, m4a, mp4, webm, mkv — до 500 МБ
-    </p>
-    <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mkv" multiple>
+
+  <!-- Navigation -->
+  <div class="nav-links">
+    <a href="/live">Живая транскрибация</a>
+    <a href="/history">История</a>
   </div>
-  <div id="fileList" style="margin-bottom:1rem;color:#38bdf8;font-size:0.9rem;"></div>
-  <div class="options">
-    <label class="option">
-      <select id="language" style="background:#1e293b;color:#e0e0e0;border:1px solid #334155;border-radius:4px;padding:4px 8px;">
-        <option value="">Авто-определение</option>
-        <option value="ru" selected>Русский</option>
-        <option value="en">English</option>
-        <option value="uk">Українська</option>
-        <option value="de">Deutsch</option>
-        <option value="fr">Français</option>
-        <option value="es">Español</option>
-        <option value="zh">中文</option>
-        <option value="ja">日本語</option>
-        <option value="ko">한국어</option>
-        <option value="ar">العربية</option>
-        <option value="pt">Português</option>
-        <option value="it">Italiano</option>
-        <option value="pl">Polski</option>
-        <option value="tr">Türkçe</option>
-        <option value="kk">Қазақша</option>
-      </select>
-    </label>
-    <label class="option"><input type="checkbox" id="diarize" checked> Диаризация</label>
-    <label class="option"><input type="checkbox" id="summarize" checked> Суммаризация</label>
-    <label class="option">
-      <select id="summaryTemplate" style="background:#1e293b;color:#e0e0e0;border:1px solid #334155;border-radius:4px;padding:4px 8px;">
-        <option value="meeting">Встреча</option>
-        <option value="standup">Стендап</option>
-        <option value="interview">Интервью</option>
-        <option value="lecture">Лекция</option>
-        <option value="negotiation">Переговоры</option>
-        <option value="brainstorm">Мозговой штурм</option>
-      </select>
-    </label>
+
+  <!-- Upload card -->
+  <div class="card">
+    <div class="upload-zone" id="dropZone" onclick="fileInput.click()">
+      <span class="icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#7c6cf0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </span>
+      <p class="label">Перетащи файлы сюда или нажми для выбора</p>
+      <p class="hint">mp3, wav, ogg, m4a, mp4, webm, mkv -- до 500 МБ</p>
+      <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mkv" multiple>
+    </div>
+    <div class="file-list" id="fileList"></div>
+
+    <!-- Options -->
+    <div class="options-grid">
+      <div class="neu-select">
+        <select id="language">
+          <option value="">Авто</option>
+          <option value="ru" selected>Русский</option>
+          <option value="en">English</option>
+          <option value="uk">Українська</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+        </select>
+      </div>
+      <div class="neu-select">
+        <select id="summaryTemplate">
+          <option value="meeting">Встреча</option>
+          <option value="standup">Стендап</option>
+          <option value="interview">Интервью</option>
+          <option value="lecture">Лекция</option>
+          <option value="brainstorm">Мозговой штурм</option>
+        </select>
+      </div>
+      <label class="neu-check">
+        <input type="checkbox" id="diarize" checked>
+        <span class="checkmark"></span>
+        Диаризация
+      </label>
+      <label class="neu-check">
+        <input type="checkbox" id="summarize" checked>
+        <span class="checkmark"></span>
+        Суммаризация
+      </label>
+    </div>
+
+    <button class="btn-submit" id="submitBtn" disabled onclick="upload()">Транскрибировать</button>
   </div>
-  <button class="btn" id="submitBtn" disabled onclick="upload()">Транскрибировать</button>
-  <div class="status" id="status"></div>
+
+  <!-- Task results area -->
+  <div id="tasksArea"></div>
+
 </div>
+
 <script>
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const submitBtn = document.getElementById('submitBtn');
-const statusEl = document.getElementById('status');
+const tasksArea = document.getElementById('tasksArea');
 const fileListEl = document.getElementById('fileList');
 let selectedFiles = [];
-
-function updateFileList() {
-  if (!selectedFiles.length) { fileListEl.innerHTML = ''; submitBtn.disabled = true; return; }
-  const totalMB = selectedFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024;
-  fileListEl.innerHTML = selectedFiles.map((f, i) =>
-    `${f.name} (${(f.size/1024/1024).toFixed(1)} МБ)`
-  ).join('<br>') + `<br><small>Всего: ${selectedFiles.length} файл(ов), ${totalMB.toFixed(1)} МБ</small>`;
-  submitBtn.disabled = false;
-}
-
-fileInput.addEventListener('change', (e) => {
-  selectedFiles = Array.from(e.target.files);
-  updateFileList();
-});
-
-['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, (ev) => {
-  ev.preventDefault(); dropZone.classList.add('dragover');
-}));
-['dragleave','drop'].forEach(e => dropZone.addEventListener(e, (ev) => {
-  ev.preventDefault(); dropZone.classList.remove('dragover');
-}));
-dropZone.addEventListener('drop', (e) => {
-  selectedFiles = Array.from(e.dataTransfer.files);
-  updateFileList();
-});
-
-async function upload() {
-  if (!selectedFiles.length) return;
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Загрузка...';
-  statusEl.className = 'status show pending';
-
-  const taskIds = [];
-  for (let i = 0; i < selectedFiles.length; i++) {
-    statusEl.innerHTML = `⏳ Загрузка ${i+1}/${selectedFiles.length}: ${selectedFiles[i].name}`;
-    const fd = new FormData();
-    fd.append('file', selectedFiles[i]);
-    fd.append('language', document.getElementById('language').value);
-    fd.append('diarize', document.getElementById('diarize').checked);
-    fd.append('summarize', document.getElementById('summarize').checked);
-    fd.append('summary_template', document.getElementById('summaryTemplate').value);
-    try {
-      const resp = await fetch('/api/transcribe', { method: 'POST', body: fd });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Upload failed');
-      taskIds.push({ id: data.task_id, name: selectedFiles[i].name });
-    } catch (e) {
-      taskIds.push({ id: null, name: selectedFiles[i].name, error: e.message });
-    }
-  }
-
-  // Show all tasks with individual polling
-  statusEl.innerHTML = '';
-  taskIds.forEach(t => {
-    const div = document.createElement('div');
-    div.className = 'status show pending';
-    div.style.marginTop = '0.5rem';
-    div.id = 'task-' + (t.id || 'err-' + Math.random());
-    if (t.error) {
-      div.className = 'status show error';
-      div.innerHTML = `❌ ${t.name}: ${t.error}`;
-    } else {
-      div.innerHTML = `🔄 ${t.name} (${t.id})...`;
-      pollTask(t.id, t.name, div);
-    }
-    statusEl.appendChild(div);
-  });
-  submitBtn.disabled = false;
-  submitBtn.textContent = 'Транскрибировать';
-}
-
-async function cancelTask(taskId, el) {
-  try {
-    await fetch(`/api/cancel/${taskId}`, { method: 'POST' });
-    el.className = 'status show error';
-    el.innerHTML = `⛔ Отменено`;
-  } catch(e) { alert('Ошибка отмены: ' + e.message); }
-}
-
-function pollTask(taskId, fileName, el) {
-  const poll = async () => {
-    try {
-      const resp = await fetch(`/api/status/${taskId}`);
-      const data = await resp.json();
-      if (data.status === 'done') {
-        el.className = 'status show success';
-        const d = data.data || {};
-        el.innerHTML = `✅ ${fileName}
-          <div class="files" style="margin-top:0.5rem;">
-            <a href="/view/${taskId}" style="background:#0ea5e9;color:#fff;font-weight:600;">▶ Открыть</a>
-            <a href="/api/result/${taskId}/docx" download>📄 DOCX</a>
-            <a href="/api/result/${taskId}/txt" download>📝 TXT</a>
-          </div>`;
-        return;
-      }
-      if (data.status === 'error') {
-        el.className = 'status show error';
-        el.innerHTML = `❌ ${fileName}: ${data.message}`;
-        return;
-      }
-      if (data.status === 'cancelled') {
-        el.className = 'status show error';
-        el.innerHTML = `⛔ ${fileName}: отменено`;
-        return;
-      }
-      const pct = data.progress || 0;
-      el.innerHTML = `🔄 ${fileName} — ${pct}% ${data.message || ''} <button onclick="cancelTask('${taskId}',this.parentElement)" style="margin-left:8px;background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 10px;cursor:pointer;font-size:0.85rem;">Отмена</button>`;
-      setTimeout(poll, 3000);
-    } catch(e) { setTimeout(poll, 5000); }
-  };
-  setTimeout(poll, 2000);
-}
 
 const STEP_NAMES = {
   init: 'Инициализация', prepare: 'Подготовка аудио',
   transcribe: 'Транскрибация', diarize: 'Диаризация',
   postprocess: 'Постобработка', summarize: 'Суммаризация', done: 'Готово'
 };
-const STEP_ORDER = ['prepare','transcribe','diarize','postprocess','summarize'];
+const STEP_ORDER = ['prepare', 'transcribe', 'diarize', 'postprocess', 'summarize'];
+
+function updateFileList() {
+  if (!selectedFiles.length) {
+    fileListEl.innerHTML = '';
+    submitBtn.disabled = true;
+    return;
+  }
+  const totalMB = selectedFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024;
+  fileListEl.innerHTML = selectedFiles.map(f =>
+    f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' МБ)'
+  ).join('<br>') +
+    '<br><small style="color:var(--text-dim)">Всего: ' + selectedFiles.length + ' файл(ов), ' + totalMB.toFixed(1) + ' МБ</small>';
+  submitBtn.disabled = false;
+}
+
+fileInput.addEventListener('change', e => {
+  selectedFiles = Array.from(e.target.files);
+  updateFileList();
+});
+
+['dragenter', 'dragover'].forEach(ev =>
+  dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); })
+);
+['dragleave', 'drop'].forEach(ev =>
+  dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); })
+);
+dropZone.addEventListener('drop', e => {
+  selectedFiles = Array.from(e.dataTransfer.files);
+  updateFileList();
+});
 
 function renderProgress(pct, step, message) {
   const dots = STEP_ORDER.map(s => {
-    const idx = STEP_ORDER.indexOf(s);
     const curIdx = STEP_ORDER.indexOf(step);
+    const idx = STEP_ORDER.indexOf(s);
     let cls = 'dot';
     if (curIdx > idx) cls += ' done';
     else if (s === step) cls += ' active';
-    return `<div class="${cls}" title="${STEP_NAMES[s] || s}"></div>`;
+    return '<div class="' + cls + '" title="' + (STEP_NAMES[s] || s) + '"></div>';
   }).join('');
-  return `
-    <div style="margin-bottom:0.5rem;font-weight:600;">${STEP_NAMES[step] || step}</div>
-    <div class="progress-wrap">
-      <div class="progress-bar" style="width:${Math.max(pct,3)}%">${pct}%</div>
-    </div>
-    <div class="steps">${dots}</div>
-    <div class="step-label">${message}</div>`;
+  return '<div class="step-title">' + (STEP_NAMES[step] || step) + '</div>' +
+    '<div class="progress-wrap"><div class="progress-bar" style="width:' + Math.max(pct, 3) + '%">' + pct + '%</div></div>' +
+    '<div class="steps">' + dots + '</div>' +
+    '<div class="step-label">' + message + '</div>';
 }
 
-async function pollStatus(taskId) {
+async function upload() {
+  if (!selectedFiles.length) return;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Загрузка...';
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i];
+    const card = document.createElement('div');
+    card.className = 'task-card pending';
+    card.innerHTML = '<div class="task-name">' + file.name + '</div><div class="task-msg">Загрузка ' + (i + 1) + '/' + selectedFiles.length + '...</div>';
+    tasksArea.prepend(card);
+
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('language', document.getElementById('language').value);
+    fd.append('diarize', document.getElementById('diarize').checked);
+    fd.append('summarize', document.getElementById('summarize').checked);
+    fd.append('summary_template', document.getElementById('summaryTemplate').value);
+
+    try {
+      const resp = await fetch('/api/transcribe', { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+      pollTask(data.task_id, file.name, card);
+    } catch (e) {
+      card.className = 'task-card error';
+      card.innerHTML = '<div class="task-name">' + file.name + '</div><div class="task-msg">' + e.message + '</div>';
+    }
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Транскрибировать';
+}
+
+async function cancelTask(taskId, card) {
+  try {
+    await fetch('/api/cancel/' + taskId, { method: 'POST' });
+    card.className = 'task-card error';
+    card.innerHTML = '<div class="task-name">Отменено</div>';
+  } catch (e) {
+    alert('Ошибка отмены: ' + e.message);
+  }
+}
+
+function pollTask(taskId, fileName, card) {
   const poll = async () => {
     try {
-      const resp = await fetch(`/api/status/${taskId}`);
+      const resp = await fetch('/api/status/' + taskId);
       const data = await resp.json();
 
       if (data.status === 'done') {
-        statusEl.className = 'status show success';
-        const d = data.data || {};
-        statusEl.innerHTML = `
-          ${renderProgress(100, 'done', 'Обработка завершена')}
-          <div style="margin-top:1rem;">
-          ⏱ ${(d.duration/60).toFixed(0)} мин | 👥 ${(d.speakers||[]).length} спикеров |
-          ⚡ ${(d.processing_time).toFixed(0)}с<br>
-          ${d.summary ? '<br>📋 ' + d.summary.substring(0,300) + '...<br>' : ''}
-          </div>
-          <div class="files">
-            <a href="/view/${taskId}" style="background:#0ea5e9;color:#fff;font-weight:600;">▶ Открыть с плеером</a>
-            <a href="/api/result/${taskId}/docx" download>📄 Скачать DOCX</a>
-            <a href="/api/result/${taskId}/txt" download>📝 Скачать TXT</a>
-            <a href="/api/result/${taskId}/json" download>📊 Скачать JSON</a>
-            <a href="/api/result/${taskId}/srt" download>🎬 Скачать SRT</a>
-          </div>`;
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Транскрибировать';
+        card.className = 'task-card success';
+        card.innerHTML = '<div class="task-name">' + fileName + '</div>' +
+          renderProgress(100, 'done', 'Обработка завершена') +
+          '<div class="result-links">' +
+            '<a class="primary" href="/view/' + taskId + '">Открыть</a>' +
+            '<a href="/api/result/' + taskId + '/docx" download>DOCX</a>' +
+            '<a href="/api/result/' + taskId + '/txt" download>TXT</a>' +
+            '<a href="/api/result/' + taskId + '/srt" download>SRT</a>' +
+          '</div>';
         return;
       }
 
       if (data.status === 'error') {
-        statusEl.className = 'status show error';
-        statusEl.innerHTML = `❌ Ошибка: ${data.message}`;
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Транскрибировать';
+        card.className = 'task-card error';
+        card.innerHTML = '<div class="task-name">' + fileName + '</div><div class="task-msg">' + data.message + '</div>';
         return;
       }
 
-      statusEl.className = 'status show pending';
+      if (data.status === 'cancelled') {
+        card.className = 'task-card error';
+        card.innerHTML = '<div class="task-name">' + fileName + ': отменено</div>';
+        return;
+      }
+
       const pct = data.progress || 0;
       const step = data.step || 'init';
       const msg = data.message || 'Обработка...';
-      statusEl.innerHTML = renderProgress(pct, step, msg);
-      setTimeout(poll, 2000);
+      card.className = 'task-card pending';
+      card.innerHTML = '<div class="task-name">' + fileName + '</div>' +
+        renderProgress(pct, step, msg);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn-cancel';
+      cancelBtn.textContent = 'Отмена';
+      cancelBtn.onclick = () => cancelTask(taskId, card);
+      card.appendChild(cancelBtn);
+
+      setTimeout(poll, 3000);
     } catch (e) {
       setTimeout(poll, 5000);
     }
   };
-  setTimeout(poll, 1500);
+  setTimeout(poll, 2000);
 }
 </script>
 </body>

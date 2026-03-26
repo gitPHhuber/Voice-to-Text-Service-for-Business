@@ -5,57 +5,414 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ASVO — Живая транскрибация</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-       background: #0a0f1a; color: #e0e0e0; min-height: 100vh;
-       display: flex; flex-direction: column; align-items: center; }
-.header { width: 100%; padding: 1rem 2rem; background: #111827;
-          border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 1rem; }
-.header h1 { color: #38bdf8; font-size: 1.2rem; }
-.header a { color: #38bdf8; text-decoration: none; }
-.controls { padding: 1.5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-.controls select { background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
-                   border-radius: 6px; padding: 8px 12px; }
-.record-btn { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #ef4444;
-              background: transparent; cursor: pointer; position: relative; transition: all 0.3s; }
-.record-btn::after { content: ''; position: absolute; top: 50%; left: 50%;
-                     transform: translate(-50%, -50%); width: 24px; height: 24px;
-                     background: #ef4444; border-radius: 50%; transition: all 0.3s; }
-.record-btn.recording { border-color: #ef4444; animation: pulse-ring 1.5s infinite; }
-.record-btn.recording::after { border-radius: 4px; width: 20px; height: 20px; }
-@keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
-                        50% { box-shadow: 0 0 0 12px rgba(239,68,68,0); } }
-.status-text { font-size: 0.9rem; color: #64748b; }
-.status-text.recording { color: #ef4444; }
-.transcript { width: 100%; max-width: 800px; padding: 1rem 2rem 4rem; flex: 1; }
-.live-seg { padding: 0.5rem; margin: 0.25rem 0; border-radius: 6px;
-            border-left: 3px solid #38bdf8; background: #111d2b; }
-.live-seg .time { color: #64748b; font-size: 0.8rem; font-family: monospace; }
-.live-seg .text { margin-top: 0.25rem; line-height: 1.5; }
-.live-seg.partial { opacity: 0.6; border-left-color: #64748b; }
-.timer { font-family: monospace; font-size: 1.2rem; color: #38bdf8; }
+  :root {
+    --bg: #2d2d3f;
+    --bg-dark: #252536;
+    --shadow-dark: #1a1a2e;
+    --shadow-light: #3d3d55;
+    --accent: #7c6cf0;
+    --accent-light: #9d8ff7;
+    --accent-glow: rgba(124, 108, 240, 0.25);
+    --red: #ef4444;
+    --red-glow: rgba(239, 68, 68, 0.3);
+    --text: #e0dff0;
+    --text-dim: #8a89a8;
+    --text-muted: #6b6a85;
+    --radius: 20px;
+    --radius-sm: 14px;
+    --radius-xs: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Header */
+  .header {
+    width: 100%;
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    background: var(--bg);
+    box-shadow: 0 4px 12px var(--shadow-dark);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--accent-light);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: var(--radius-xs);
+    background: var(--bg);
+    box-shadow:
+      4px 4px 8px var(--shadow-dark),
+      -4px -4px 8px var(--shadow-light);
+    transition: all 0.25s ease;
+  }
+
+  .header .back-link:hover {
+    box-shadow:
+      inset 3px 3px 6px var(--shadow-dark),
+      inset -3px -3px 6px var(--shadow-light);
+    color: var(--accent);
+  }
+
+  .header .back-link svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .header h1 {
+    color: var(--accent-light);
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  /* Controls panel */
+  .controls {
+    width: 100%;
+    max-width: 800px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  /* Language selector */
+  .lang-wrap {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    box-shadow:
+      6px 6px 12px var(--shadow-dark),
+      -6px -6px 12px var(--shadow-light);
+    padding: 4px;
+  }
+
+  .lang-wrap select {
+    background: transparent;
+    color: var(--text);
+    border: none;
+    outline: none;
+    padding: 10px 36px 10px 16px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239d8ff7' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    border-radius: var(--radius-xs);
+  }
+
+  .lang-wrap select option {
+    background: var(--bg-dark);
+    color: var(--text);
+  }
+
+  /* Record button */
+  .record-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .record-btn {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    background: var(--bg);
+    box-shadow:
+      8px 8px 16px var(--shadow-dark),
+      -8px -8px 16px var(--shadow-light);
+    transition: all 0.3s ease;
+    outline: none;
+  }
+
+  .record-btn::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    border: 3px solid var(--red);
+    transition: all 0.3s ease;
+  }
+
+  .record-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    background: var(--red);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 12px var(--red-glow);
+  }
+
+  .record-btn:hover {
+    box-shadow:
+      10px 10px 20px var(--shadow-dark),
+      -10px -10px 20px var(--shadow-light);
+  }
+
+  .record-btn:active {
+    box-shadow:
+      inset 4px 4px 8px var(--shadow-dark),
+      inset -4px -4px 8px var(--shadow-light);
+  }
+
+  /* Recording state */
+  .record-btn.recording {
+    box-shadow:
+      8px 8px 16px var(--shadow-dark),
+      -8px -8px 16px var(--shadow-light),
+      0 0 30px var(--red-glow);
+    animation: pulse-shadow 1.8s ease-in-out infinite;
+  }
+
+  .record-btn.recording::after {
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+  }
+
+  @keyframes pulse-shadow {
+    0%, 100% {
+      box-shadow:
+        8px 8px 16px var(--shadow-dark),
+        -8px -8px 16px var(--shadow-light),
+        0 0 20px var(--red-glow);
+    }
+    50% {
+      box-shadow:
+        8px 8px 16px var(--shadow-dark),
+        -8px -8px 16px var(--shadow-light),
+        0 0 40px rgba(239, 68, 68, 0.5),
+        0 0 60px rgba(239, 68, 68, 0.2);
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+    100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+  }
+
+  .record-btn.recording .pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: 2px solid var(--red);
+    animation: pulse-ring 1.8s ease-out infinite;
+    pointer-events: none;
+  }
+
+  /* Timer */
+  .timer {
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--accent-light);
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 24px var(--accent-glow), 0 0 48px rgba(124, 108, 240, 0.12);
+    padding: 12px 28px;
+    border-radius: var(--radius);
+    background: var(--bg);
+    box-shadow:
+      inset 4px 4px 8px var(--shadow-dark),
+      inset -4px -4px 8px var(--shadow-light);
+    min-width: 180px;
+    text-align: center;
+  }
+
+  .timer.active {
+    color: var(--red);
+    text-shadow: 0 0 24px var(--red-glow), 0 0 48px rgba(239, 68, 68, 0.12);
+  }
+
+  /* Status */
+  .status-text {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: color 0.3s;
+  }
+
+  .status-text.recording {
+    color: var(--red);
+  }
+
+  /* Transcript area */
+  .transcript {
+    width: 100%;
+    max-width: 800px;
+    padding: 0 2rem 4rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .live-seg {
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    box-shadow:
+      6px 6px 12px var(--shadow-dark),
+      -6px -6px 12px var(--shadow-light);
+    position: relative;
+    overflow: hidden;
+    animation: seg-appear 0.3s ease-out;
+  }
+
+  .live-seg::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-light));
+    border-radius: 4px 0 0 4px;
+  }
+
+  .live-seg .time {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .live-seg .text {
+    margin-top: 0.3rem;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+
+  .live-seg.partial {
+    opacity: 0.5;
+  }
+
+  .live-seg.partial::before {
+    background: var(--text-muted);
+  }
+
+  @keyframes seg-appear {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .live-seg.partial {
+    animation: none;
+  }
+
+  /* Empty transcript state */
+  .transcript-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 3rem 1rem;
+    font-size: 0.95rem;
+    border-radius: var(--radius);
+    background: var(--bg);
+    box-shadow:
+      inset 4px 4px 8px var(--shadow-dark),
+      inset -4px -4px 8px var(--shadow-light);
+  }
+
+  .transcript-empty-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    opacity: 0.35;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .header { padding: 1rem 1.25rem; }
+    .controls { padding: 1.5rem 1rem; }
+    .transcript { padding: 0 1rem 3rem; }
+    .timer { font-size: 1.7rem; min-width: 150px; padding: 10px 20px; }
+    .record-btn { width: 74px; height: 74px; }
+    .record-btn::before { inset: 5px; }
+    .record-btn::after { width: 24px; height: 24px; }
+    .record-btn.recording::after { width: 20px; height: 20px; }
+  }
 </style>
 </head>
 <body>
 <div class="header">
-  <a href="/">← Главная</a>
+  <a href="/" class="back-link">
+    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    Главная
+  </a>
   <h1>Живая транскрибация</h1>
 </div>
+
 <div class="controls">
-  <select id="langSelect">
-    <option value="">Авто</option>
-    <option value="ru" selected>Русский</option>
-    <option value="en">English</option>
-    <option value="uk">Українська</option>
-    <option value="de">Deutsch</option>
-  </select>
-  <button class="record-btn" id="recordBtn" onclick="toggleRecording()"></button>
-  <div>
-    <div class="status-text" id="statusText">Нажми для записи</div>
+  <div class="lang-wrap">
+    <select id="langSelect">
+      <option value="">Авто</option>
+      <option value="ru" selected>Русский</option>
+      <option value="en">English</option>
+      <option value="uk">Українська</option>
+      <option value="de">Deutsch</option>
+    </select>
+  </div>
+
+  <div class="record-area">
+    <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+      <span class="pulse-ring" style="display:none;"></span>
+    </button>
     <div class="timer" id="timer">00:00</div>
+    <div class="status-text" id="statusText">Нажмите для записи</div>
   </div>
 </div>
-<div class="transcript" id="transcript"></div>
+
+<div class="transcript" id="transcript">
+  <div class="transcript-empty" id="emptyState">
+    <div class="transcript-empty-icon">&#127908;</div>
+    Начните запись, чтобы увидеть транскрипт
+  </div>
+</div>
 
 <script>
 let recording = false;
@@ -70,11 +427,13 @@ const recordBtn = document.getElementById('recordBtn');
 const statusText = document.getElementById('statusText');
 const timerEl = document.getElementById('timer');
 const transcriptEl = document.getElementById('transcript');
+const emptyState = document.getElementById('emptyState');
+const pulseRing = recordBtn.querySelector('.pulse-ring');
 
 function fmtTime(s) {
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
 async function toggleRecording() {
@@ -88,7 +447,7 @@ async function toggleRecording() {
 async function startRecording() {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch(e) {
+  } catch (e) {
     statusText.textContent = 'Нет доступа к микрофону';
     return;
   }
@@ -101,14 +460,28 @@ async function startRecording() {
     const seg = JSON.parse(e.data);
     addSegment(seg);
   };
-  ws.onerror = () => { statusText.textContent = 'Ошибка соединения'; };
-  ws.onclose = () => { if (recording) stopRecording(); };
+  ws.onerror = () => {
+    statusText.textContent = 'Ошибка соединения';
+    statusText.classList.remove('recording');
+  };
+  ws.onclose = () => {
+    if (recording) stopRecording();
+  };
 
   // Wait for WS to open
-  await new Promise((resolve, reject) => {
-    ws.onopen = resolve;
-    setTimeout(reject, 5000);
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      setTimeout(() => reject(new Error('timeout')), 5000);
+    });
+  } catch (e) {
+    statusText.textContent = 'Не удалось подключиться';
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+    return;
+  }
 
   audioCtx = new AudioContext({ sampleRate: 16000 });
   const source = audioCtx.createMediaStreamSource(mediaStream);
@@ -129,19 +502,28 @@ async function startRecording() {
 
   recording = true;
   recordBtn.classList.add('recording');
+  pulseRing.style.display = 'block';
   statusText.textContent = 'Запись...';
   statusText.classList.add('recording');
+  timerEl.classList.add('active');
   startTime = Date.now();
   timerInterval = setInterval(() => {
     timerEl.textContent = fmtTime((Date.now() - startTime) / 1000);
   }, 500);
+
+  // Hide empty state on first recording
+  if (emptyState) {
+    emptyState.style.display = 'none';
+  }
 }
 
 function stopRecording() {
   recording = false;
   recordBtn.classList.remove('recording');
+  pulseRing.style.display = 'none';
   statusText.textContent = 'Остановлено';
   statusText.classList.remove('recording');
+  timerEl.classList.remove('active');
   clearInterval(timerInterval);
 
   if (processor) { processor.disconnect(); processor = null; }
@@ -150,13 +532,34 @@ function stopRecording() {
   if (ws && ws.readyState === WebSocket.OPEN) { ws.close(); ws = null; }
 }
 
+let lastPartialEl = null;
+
 function addSegment(seg) {
+  // Remove previous partial if this is an update
+  if (seg.is_partial && lastPartialEl) {
+    lastPartialEl.remove();
+  }
+
   const div = document.createElement('div');
   div.className = 'live-seg' + (seg.is_partial ? ' partial' : '');
-  div.innerHTML = `<span class="time">${fmtTime(seg.start)}</span>
-                   <div class="text">${seg.text}</div>`;
+  div.innerHTML =
+    `<span class="time">${fmtTime(seg.start)}</span>` +
+    `<div class="text">${escHtml(seg.text)}</div>`;
+
   transcriptEl.appendChild(div);
+
+  if (seg.is_partial) {
+    lastPartialEl = div;
+  } else {
+    lastPartialEl = null;
+  }
+
   div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 </script>
 </body>

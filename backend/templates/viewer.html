@@ -5,59 +5,491 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ASVO — Просмотр транскрипта</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-       background: #0a0f1a; color: #e0e0e0; }
-.header { padding: 1rem 2rem; background: #111827; border-bottom: 1px solid #1e293b;
-          display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.header h1 { color: #38bdf8; font-size: 1.2rem; }
-.header a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
-.player-wrap { position: sticky; top: 0; z-index: 10; background: #111827;
-               padding: 0.75rem 2rem; border-bottom: 1px solid #1e293b; }
-audio { width: 100%; height: 40px; }
-.toolbar { padding: 0.5rem 2rem; background: #0d1520; display: flex; gap: 0.5rem;
-           align-items: center; flex-wrap: wrap; border-bottom: 1px solid #1e293b; }
-.toolbar button, .toolbar select {
-    background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
-    border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.85rem; }
-.toolbar button:hover { background: #334155; }
-.toolbar .save-btn { background: #22c55e; color: #0a0f1a; font-weight: 600; border: none; }
-.toolbar .save-btn:hover { background: #16a34a; }
-.toolbar .save-btn.dirty { animation: pulse 1s infinite; }
-@keyframes pulse { 50% { opacity: 0.7; } }
-.transcript { padding: 1rem 2rem 4rem; max-width: 900px; margin: 0 auto; }
-.segment { padding: 0.75rem; margin: 0.25rem 0; border-radius: 8px; cursor: pointer;
-           transition: background 0.2s; border-left: 3px solid transparent; }
-.segment:hover { background: #111d2b; }
-.segment.active { background: #111d2b; border-left-color: #38bdf8; }
-.seg-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
-.seg-time { color: #64748b; font-size: 0.8rem; font-family: monospace; cursor: pointer; }
-.seg-speaker { font-weight: 600; font-size: 0.9rem; }
-.seg-speaker[contenteditable]:focus { outline: 1px solid #38bdf8; border-radius: 3px; padding: 0 4px; }
-.seg-text { font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; }
-.seg-text[contenteditable]:focus { outline: 1px solid #38bdf8; border-radius: 3px; padding: 2px 4px; }
-.speaker-c0 { color: #38bdf8; } .speaker-c1 { color: #f87171; }
-.speaker-c2 { color: #4ade80; } .speaker-c3 { color: #c084fc; }
-.speaker-c4 { color: #fb923c; } .speaker-c5 { color: #2dd4bf; }
-.search-bar { padding: 0.5rem 2rem; background: #0d1520; border-bottom: 1px solid #1e293b; }
-.search-bar input { width: 100%; background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
-                    border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; }
-mark { background: #854d0e; color: #fef08a; border-radius: 2px; }
-.no-data { text-align: center; padding: 4rem; color: #64748b; }
+/* === RESET & BASE === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #2d2d3f;
+  --bg-dark: #252535;
+  --bg-light: #35354a;
+  --shadow-dark: #1a1a2e;
+  --shadow-light: #3d3d55;
+  --accent: #7c6cf0;
+  --accent-light: #9d8ff7;
+  --accent-glow: rgba(124, 108, 240, 0.25);
+  --text: #e0dff0;
+  --text-muted: #8888a8;
+  --text-dim: #6a6a88;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --neu-out: 6px 6px 14px var(--shadow-dark), -6px -6px 14px var(--shadow-light);
+  --neu-in: inset 4px 4px 10px var(--shadow-dark), inset -4px -4px 10px var(--shadow-light);
+  --neu-out-sm: 3px 3px 8px var(--shadow-dark), -3px -3px 8px var(--shadow-light);
+  --neu-in-sm: inset 2px 2px 6px var(--shadow-dark), inset -2px -2px 6px var(--shadow-light);
+  --transition: 0.25s ease;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--bg-light); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* === HEADER === */
+.header {
+  padding: 1.5rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  background: var(--bg);
+}
+
+.header-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: var(--neu-out-sm);
+  color: var(--accent-light);
+  text-decoration: none;
+  font-size: 1.2rem;
+  transition: var(--transition);
+}
+.header-back:hover {
+  box-shadow: var(--neu-in-sm);
+  color: var(--accent);
+}
+
+.header-info { flex: 1; min-width: 200px; }
+.header-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.header-title span { color: var(--accent-light); }
+
+.header-meta {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--bg);
+  box-shadow: var(--neu-out-sm);
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+}
+.meta-chip svg { width: 14px; height: 14px; opacity: 0.6; }
+
+/* === AUDIO PLAYER === */
+.player-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 1rem 2rem;
+  background: var(--bg);
+}
+.player-inner {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--neu-out);
+}
+audio {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+/* Chrome audio styling */
+audio::-webkit-media-controls-panel {
+  background: var(--bg-dark);
+  border-radius: var(--radius-sm);
+}
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* === TOOLBAR === */
+.toolbar {
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  background: var(--bg);
+  max-width: 920px;
+  margin: 0.75rem auto 0;
+  border-radius: var(--radius);
+  box-shadow: var(--neu-out);
+}
+
+.neu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: var(--neu-out-sm);
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.neu-btn:hover {
+  box-shadow: var(--neu-in-sm);
+  color: var(--text);
+}
+.neu-btn:active {
+  box-shadow: var(--neu-in-sm);
+}
+.neu-btn.accent {
+  color: var(--accent-light);
+}
+.neu-btn.accent:hover {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+.neu-btn.save-btn {
+  color: #7ef09d;
+}
+.neu-btn.save-btn:hover {
+  background: #2e8b57;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(46, 139, 87, 0.3);
+}
+.neu-btn.save-btn.dirty {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: var(--neu-out-sm); }
+  50% { box-shadow: 0 0 18px rgba(126, 240, 157, 0.4); }
+}
+
+.neu-select {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: var(--neu-in-sm);
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238888a8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  max-width: 160px;
+}
+.neu-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.toolbar-spacer { flex: 1; }
+
+.dl-group {
+  display: flex;
+  gap: 0.35rem;
+}
+.dl-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-xs);
+  background: var(--bg);
+  box-shadow: var(--neu-out-sm);
+  color: var(--accent-light);
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: var(--transition);
+}
+.dl-link:hover {
+  box-shadow: var(--neu-in-sm);
+  color: #fff;
+}
+
+/* === SEARCH === */
+.search-wrap {
+  max-width: 920px;
+  margin: 0.75rem auto 0;
+  padding: 0 2rem;
+}
+.search-inner {
+  position: relative;
+}
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--neu-in);
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: var(--transition);
+}
+.search-input::placeholder { color: var(--text-dim); }
+.search-input:focus {
+  outline: none;
+  box-shadow: var(--neu-in), 0 0 0 2px var(--accent-glow);
+}
+
+/* === TRANSCRIPT === */
+.transcript {
+  max-width: 920px;
+  margin: 1rem auto 0;
+  padding: 0 2rem 6rem;
+}
+
+/* Segment card */
+.segment {
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.6rem;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--neu-out-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+  border-left: 4px solid transparent;
+  position: relative;
+}
+.segment:hover {
+  box-shadow: var(--neu-in-sm);
+  transform: translateY(1px);
+}
+.segment.active {
+  border-left-color: var(--accent);
+  box-shadow: var(--neu-in-sm), 0 0 24px var(--accent-glow);
+  background: linear-gradient(135deg, var(--bg) 0%, rgba(124, 108, 240, 0.06) 100%);
+}
+
+.seg-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.seg-time {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  background: var(--bg);
+  box-shadow: var(--neu-in-sm);
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+}
+.seg-time:hover {
+  color: var(--accent-light);
+  box-shadow: var(--neu-out-sm);
+}
+
+.seg-speaker {
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.01em;
+}
+.seg-speaker[contenteditable="true"]:focus {
+  outline: none;
+  background: var(--bg-dark);
+  box-shadow: var(--neu-in-sm);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+
+.confidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.conf-high { color: #4ade80; background: #4ade80; }
+.conf-mid  { color: #facc15; background: #facc15; }
+.conf-low  { color: #f87171; background: #f87171; }
+
+.seg-text {
+  font-size: 0.93rem;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.seg-text[contenteditable="true"]:focus {
+  outline: none;
+  background: var(--bg-dark);
+  box-shadow: var(--neu-in-sm);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: -6px -10px;
+}
+.seg-text.low-conf {
+  opacity: 0.55;
+  border-left: 2px solid #f87171;
+  padding-left: 8px;
+}
+
+/* Speaker colors */
+.speaker-c0 { color: #9d8ff7; }
+.speaker-c1 { color: #f06c9b; }
+.speaker-c2 { color: #6cf0c4; }
+.speaker-c3 { color: #f0c46c; }
+.speaker-c4 { color: #6cb4f0; }
+.speaker-c5 { color: #f06c6c; }
+
+/* Highlight matches */
+mark {
+  background: rgba(124, 108, 240, 0.3);
+  color: #d4ccff;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+/* Empty state */
+.no-data {
+  text-align: center;
+  padding: 5rem 2rem;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+}
+.no-data svg { margin-bottom: 1rem; opacity: 0.3; }
+
+/* Toast notification */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius);
+  background: var(--bg-dark);
+  box-shadow: var(--neu-out), 0 0 30px var(--accent-glow);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 1000;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  opacity: 0;
+  pointer-events: none;
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+.toast.success { border-left: 4px solid #4ade80; }
+.toast.error   { border-left: 4px solid #f87171; }
+.toast.info    { border-left: 4px solid var(--accent); }
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-dim);
+  border-top-color: var(--accent-light);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* === RESPONSIVE === */
+@media (max-width: 700px) {
+  .header { padding: 1rem; }
+  .player-wrap { padding: 0.75rem 1rem; }
+  .player-inner { padding: 0.75rem 1rem; }
+  .toolbar { padding: 0.6rem 1rem; margin-left: 1rem; margin-right: 1rem; }
+  .search-wrap { padding: 0 1rem; }
+  .transcript { padding: 0 1rem 4rem; }
+  .segment { padding: 0.75rem 1rem; }
+  .header-title { font-size: 1.1rem; }
+  .meta-chip { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
+}
 </style>
 </head>
 <body>
+
+<!-- Header -->
 <div class="header">
-  <a href="/">← Главная</a>
-  <h1 id="title">Транскрипт</h1>
-  <span id="meta" style="color:#64748b;font-size:0.85rem;"></span>
+  <a href="/" class="header-back" title="На главную">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  </a>
+  <div class="header-info">
+    <div class="header-title"><span>ASVO</span> <span id="title">Транскрипт</span></div>
+    <div class="header-meta" id="metaChips"></div>
+  </div>
 </div>
-<div class="player-wrap"><audio id="audio" controls preload="auto"></audio></div>
-<div class="toolbar">
-  <button onclick="toggleEdit()" id="editBtn">Редактировать</button>
-  <button class="save-btn" id="saveBtn" style="display:none;" onclick="saveEdits()">Сохранить</button>
-  <span style="flex:1;"></span>
-  <select id="translateLang" style="max-width:150px;">
+
+<!-- Sticky audio player -->
+<div class="player-wrap">
+  <div class="player-inner">
+    <audio id="audio" controls preload="auto"></audio>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar" id="toolbar">
+  <button class="neu-btn accent" id="editBtn" onclick="toggleEdit()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Редактировать
+  </button>
+  <button class="neu-btn save-btn" id="saveBtn" style="display:none;" onclick="saveEdits()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Сохранить
+  </button>
+
+  <div class="toolbar-spacer"></div>
+
+  <select class="neu-select" id="translateLang">
     <option value="">Перевести...</option>
     <option value="en">English</option>
     <option value="ru">Русский</option>
@@ -67,126 +499,291 @@ mark { background: #854d0e; color: #fef08a; border-radius: 2px; }
     <option value="es">Español</option>
     <option value="zh">中文</option>
     <option value="ja">日本語</option>
+    <option value="ko">한국어</option>
+    <option value="pt">Português</option>
   </select>
-  <button onclick="requestTranslation()">Перевести</button>
-  <span style="flex:1;"></span>
-  <a href="" id="dlDocx" download style="color:#38bdf8;font-size:0.85rem;">DOCX</a>
-  <a href="" id="dlTxt" download style="color:#38bdf8;font-size:0.85rem;">TXT</a>
-  <a href="" id="dlSrt" download style="color:#38bdf8;font-size:0.85rem;">SRT</a>
+  <button class="neu-btn" onclick="requestTranslation()" id="translateBtn">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
+    Перевести
+  </button>
+
+  <div class="toolbar-spacer"></div>
+
+  <div class="dl-group">
+    <a href="" id="dlDocx" download class="dl-link">DOCX</a>
+    <a href="" id="dlTxt" download class="dl-link">TXT</a>
+    <a href="" id="dlSrt" download class="dl-link">SRT</a>
+  </div>
 </div>
-<div class="search-bar">
-  <input type="text" id="searchInput" placeholder="Поиск по транскрипту..." oninput="filterSegments()">
+
+<!-- Search -->
+<div class="search-wrap">
+  <div class="search-inner">
+    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="text" class="search-input" id="searchInput" placeholder="Поиск по транскрипту..." oninput="filterSegments()">
+  </div>
 </div>
+
+<!-- Transcript segments -->
 <div class="transcript" id="transcript"></div>
 
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
 <script>
+/* === STATE === */
 const TASK_ID = location.pathname.split('/').pop();
 const audio = document.getElementById('audio');
 const transcriptEl = document.getElementById('transcript');
+const toastEl = document.getElementById('toast');
+
 let segments = [];
 let editing = false;
 let dirty = false;
 let speakerColors = {};
 let colorIdx = 0;
+let activeIdx = -1;
+
+/* === SPEAKER COLORS === */
+const SPEAKER_PALETTE = [
+  '#9d8ff7', // purple
+  '#f06c9b', // pink
+  '#6cf0c4', // mint
+  '#f0c46c', // gold
+  '#6cb4f0', // sky
+  '#f06c6c', // coral
+];
 
 function getSpeakerClass(speaker) {
   if (!(speaker in speakerColors)) speakerColors[speaker] = colorIdx++ % 6;
   return 'speaker-c' + speakerColors[speaker];
 }
 
+/* === UTILITIES === */
 function fmtTime(s) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = Math.floor(s % 60);
-  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-           : `${m}:${String(sec).padStart(2,'0')}`;
+  return h
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${m}:${String(sec).padStart(2, '0')}`;
 }
 
+function fmtDuration(totalSec) {
+  if (!totalSec) return '—';
+  const m = Math.floor(totalSec / 60);
+  const s = Math.floor(totalSec % 60);
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    return `${h} ч ${m % 60} мин`;
+  }
+  return `${m} мин ${s > 0 ? s + ' сек' : ''}`.trim();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function showToast(message, type = 'info', duration = 3000) {
+  toastEl.textContent = message;
+  toastEl.className = 'toast ' + type;
+  requestAnimationFrame(() => toastEl.classList.add('show'));
+  clearTimeout(toastEl._timer);
+  toastEl._timer = setTimeout(() => toastEl.classList.remove('show'), duration);
+}
+
+/* === LOAD DATA === */
 async function load() {
+  transcriptEl.innerHTML = `
+    <div class="no-data">
+      <div class="spinner" style="width:36px;height:36px;border-width:3px;margin:0 auto 1rem;"></div>
+      <div>Загрузка транскрипта...</div>
+    </div>`;
+
   try {
     const resp = await fetch(`/api/transcript/${TASK_ID}`);
-    if (!resp.ok) { transcriptEl.innerHTML = '<div class="no-data">Транскрипт не найден</div>'; return; }
+    if (!resp.ok) {
+      transcriptEl.innerHTML = '<div class="no-data">Транскрипт не найден</div>';
+      return;
+    }
     const data = await resp.json();
     segments = data.segments || [];
+
+    /* Title */
     document.getElementById('title').textContent = data.title || data.file_name || 'Транскрипт';
-    document.getElementById('meta').textContent =
-      `${(data.duration/60).toFixed(0)} мин | ${(data.speakers||[]).length} спикеров | ${data.language || ''}`;
+
+    /* Meta chips */
+    const metaChips = document.getElementById('metaChips');
+    metaChips.innerHTML = '';
+
+    const chips = [
+      {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        text: fmtDuration(data.duration),
+      },
+      {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        text: `${(data.speakers || []).length} спикеров`,
+      },
+      {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+        text: data.language || 'auto',
+      },
+      {
+        icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+        text: `${segments.length} сегментов`,
+      },
+    ];
+
+    chips.forEach(c => {
+      if (!c.text || c.text === '—') return;
+      const span = document.createElement('span');
+      span.className = 'meta-chip';
+      span.innerHTML = c.icon + ' ' + escapeHtml(c.text);
+      metaChips.appendChild(span);
+    });
+
+    /* Audio & download links */
     audio.src = `/api/audio/${TASK_ID}`;
     document.getElementById('dlDocx').href = `/api/result/${TASK_ID}/docx`;
     document.getElementById('dlTxt').href = `/api/result/${TASK_ID}/txt`;
     document.getElementById('dlSrt').href = `/api/result/${TASK_ID}/srt`;
+
     render();
-  } catch(e) {
-    transcriptEl.innerHTML = `<div class="no-data">Ошибка: ${e.message}</div>`;
+  } catch (e) {
+    transcriptEl.innerHTML = `<div class="no-data">Ошибка: ${escapeHtml(e.message)}</div>`;
   }
 }
 
+/* === RENDER SEGMENTS === */
 function render(filter) {
   transcriptEl.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
   segments.forEach((seg, i) => {
-    if (filter && !seg.text.toLowerCase().includes(filter)) return;
+    const textLower = seg.text.toLowerCase();
+    if (filter && !textLower.includes(filter)) return;
+
     const div = document.createElement('div');
     div.className = 'segment';
     div.dataset.idx = i;
     div.dataset.start = seg.start;
     div.dataset.end = seg.end;
+
     const sc = getSpeakerClass(seg.speaker);
     const conf = seg.confidence !== undefined ? seg.confidence : 1.0;
-    const confColor = conf >= 0.7 ? '#22c55e' : conf >= 0.4 ? '#eab308' : '#ef4444';
-    const confTitle = `Уверенность: ${(conf*100).toFixed(0)}%`;
+    let confClass = 'conf-high';
+    if (conf < 0.4) confClass = 'conf-low';
+    else if (conf < 0.7) confClass = 'conf-mid';
+    const confTitle = `Уверенность: ${(conf * 100).toFixed(0)}%`;
+
+    let displayText = escapeHtml(seg.text);
+    if (filter) {
+      const regex = new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      displayText = displayText.replace(regex, '<mark>$1</mark>');
+    }
+
     div.innerHTML = `
       <div class="seg-header">
-        <span class="seg-time" onclick="seekTo(${seg.start})">${fmtTime(seg.start)}</span>
-        <span class="seg-speaker ${sc}" data-field="speaker" ${editing ? 'contenteditable="true"' : ''}>${seg.speaker}</span>
-        <span title="${confTitle}" style="width:8px;height:8px;border-radius:50%;background:${confColor};display:inline-block;"></span>
+        <span class="seg-time" onclick="seekTo(${seg.start})" title="Перейти к ${fmtTime(seg.start)}">${fmtTime(seg.start)}</span>
+        <span class="seg-speaker ${sc}" data-field="speaker" ${editing ? 'contenteditable="true"' : ''}>${escapeHtml(seg.speaker)}</span>
+        <span class="confidence-dot ${confClass}" title="${confTitle}"></span>
       </div>
-      <div class="seg-text" data-field="text" ${editing ? 'contenteditable="true"' : ''} style="${conf < 0.4 ? 'opacity:0.6;border-left:2px solid #ef4444;padding-left:6px;' : ''}">${seg.text}</div>`;
+      <div class="seg-text${conf < 0.4 ? ' low-conf' : ''}" data-field="text" ${editing ? 'contenteditable="true"' : ''}>${editing ? escapeHtml(seg.text) : displayText}</div>`;
+
+    /* Click to seek (not in edit mode) */
     div.addEventListener('click', (e) => {
-      if (!editing && !e.target.classList.contains('seg-time')) seekTo(seg.start);
+      if (!editing && !e.target.classList.contains('seg-time') && e.target.tagName !== 'MARK') {
+        seekTo(seg.start);
+      }
     });
+
+    /* Track edits */
     if (editing) {
       div.querySelectorAll('[contenteditable]').forEach(el => {
-        el.addEventListener('input', () => { dirty = true; updateDirty(); });
+        el.addEventListener('input', () => {
+          dirty = true;
+          updateDirty();
+        });
       });
     }
-    transcriptEl.appendChild(div);
+
+    frag.appendChild(div);
   });
+
+  if (frag.children.length === 0 && segments.length > 0) {
+    transcriptEl.innerHTML = '<div class="no-data">Ничего не найдено</div>';
+  } else if (segments.length === 0) {
+    transcriptEl.innerHTML = '<div class="no-data">Нет сегментов</div>';
+  } else {
+    transcriptEl.appendChild(frag);
+  }
 }
 
-function seekTo(t) { audio.currentTime = t; audio.play(); }
+/* === AUDIO CONTROLS === */
+function seekTo(t) {
+  audio.currentTime = t;
+  audio.play();
+}
 
 audio.addEventListener('timeupdate', () => {
   const t = audio.currentTime;
-  document.querySelectorAll('.segment').forEach(div => {
+  const allSegs = document.querySelectorAll('.segment');
+  let foundIdx = -1;
+
+  for (let i = 0; i < allSegs.length; i++) {
+    const div = allSegs[i];
     const s = parseFloat(div.dataset.start);
     const e = parseFloat(div.dataset.end);
     if (t >= s && t < e) {
-      if (!div.classList.contains('active')) {
-        document.querySelectorAll('.segment.active').forEach(d => d.classList.remove('active'));
-        div.classList.add('active');
-        div.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      foundIdx = i;
+      break;
     }
-  });
+  }
+
+  if (foundIdx !== -1 && foundIdx !== activeIdx) {
+    allSegs.forEach(d => d.classList.remove('active'));
+    allSegs[foundIdx].classList.add('active');
+    allSegs[foundIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    activeIdx = foundIdx;
+  } else if (foundIdx === -1 && activeIdx !== -1) {
+    allSegs.forEach(d => d.classList.remove('active'));
+    activeIdx = -1;
+  }
 });
 
+/* === EDIT MODE === */
 function toggleEdit() {
   editing = !editing;
-  document.getElementById('editBtn').textContent = editing ? 'Отменить' : 'Редактировать';
-  document.getElementById('saveBtn').style.display = editing ? '' : 'none';
-  if (!editing) { dirty = false; updateDirty(); }
+  const editBtn = document.getElementById('editBtn');
+  const saveBtn = document.getElementById('saveBtn');
+
+  if (editing) {
+    editBtn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Отменить`;
+    saveBtn.style.display = '';
+  } else {
+    editBtn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Редактировать`;
+    saveBtn.style.display = 'none';
+    dirty = false;
+    updateDirty();
+  }
   render();
 }
 
 function updateDirty() {
-  const btn = document.getElementById('saveBtn');
-  btn.classList.toggle('dirty', dirty);
+  document.getElementById('saveBtn').classList.toggle('dirty', dirty);
 }
 
 async function saveEdits() {
-  // Собираем данные из DOM
   const divs = document.querySelectorAll('.segment');
   const updated = [];
+
   divs.forEach(div => {
     const idx = parseInt(div.dataset.idx);
     const speaker = div.querySelector('[data-field="speaker"]').textContent.trim();
@@ -196,43 +793,98 @@ async function saveEdits() {
       end: segments[idx].end,
       speaker: speaker,
       text: text,
+      confidence: segments[idx].confidence,
     });
   });
+
+  const saveBtn = document.getElementById('saveBtn');
+  const prevHtml = saveBtn.innerHTML;
+  saveBtn.innerHTML = '<span class="spinner"></span> Сохранение...';
+  saveBtn.disabled = true;
 
   try {
     const resp = await fetch(`/api/transcript/${TASK_ID}`, {
       method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({segments: updated}),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ segments: updated }),
     });
     const data = await resp.json();
     if (data.status === 'ok') {
       segments = updated;
-      dirty = false; updateDirty();
-      alert('Сохранено! Файлы экспорта обновлены.');
+      dirty = false;
+      updateDirty();
+      showToast('Сохранено! Файлы экспорта обновлены.', 'success');
     } else {
-      alert('Ошибка: ' + (data.message || 'unknown'));
+      showToast('Ошибка: ' + (data.message || 'unknown'), 'error');
     }
-  } catch(e) { alert('Ошибка: ' + e.message); }
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, 'error');
+  } finally {
+    saveBtn.innerHTML = prevHtml;
+    saveBtn.disabled = false;
+  }
 }
 
+/* === TRANSLATION === */
 async function requestTranslation() {
-  const lang = document.getElementById('translateLang').value;
-  if (!lang) return;
+  const langSelect = document.getElementById('translateLang');
+  const lang = langSelect.value;
+  if (!lang) {
+    showToast('Выберите язык для перевода', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('translateBtn');
+  const prevHtml = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+
   const fd = new FormData();
   fd.append('target_language', lang);
+
   try {
     const resp = await fetch(`/api/translate/${TASK_ID}`, { method: 'POST', body: fd });
     const data = await resp.json();
-    alert(data.status === 'queued' ? `Перевод на ${lang} поставлен в очередь` : 'Ошибка');
-  } catch(e) { alert('Ошибка: ' + e.message); }
+    if (data.status === 'queued') {
+      const langName = langSelect.options[langSelect.selectedIndex].text;
+      showToast(`Перевод на ${langName} поставлен в очередь`, 'success');
+    } else {
+      showToast('Ошибка при запросе перевода', 'error');
+    }
+  } catch (e) {
+    showToast('Ошибка: ' + e.message, 'error');
+  } finally {
+    btn.innerHTML = prevHtml;
+    btn.disabled = false;
+  }
 }
 
+/* === SEARCH === */
 function filterSegments() {
   const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  activeIdx = -1;
   render(q || null);
 }
 
+/* === KEYBOARD SHORTCUTS === */
+document.addEventListener('keydown', (e) => {
+  /* Ctrl+S / Cmd+S to save in edit mode */
+  if ((e.ctrlKey || e.metaKey) && e.key === 's' && editing && dirty) {
+    e.preventDefault();
+    saveEdits();
+  }
+  /* Escape to exit edit mode */
+  if (e.key === 'Escape' && editing) {
+    toggleEdit();
+  }
+  /* Ctrl+F / Cmd+F to focus search */
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('searchInput').focus();
+  }
+});
+
+/* === INIT === */
 load();
 </script>
 </body>
