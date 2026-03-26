@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASVO — Живая транскрибация</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0a0f1a; color: #e0e0e0; min-height: 100vh;
+       display: flex; flex-direction: column; align-items: center; }
+.header { width: 100%; padding: 1rem 2rem; background: #111827;
+          border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 1rem; }
+.header h1 { color: #38bdf8; font-size: 1.2rem; }
+.header a { color: #38bdf8; text-decoration: none; }
+.controls { padding: 1.5rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.controls select { background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
+                   border-radius: 6px; padding: 8px 12px; }
+.record-btn { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #ef4444;
+              background: transparent; cursor: pointer; position: relative; transition: all 0.3s; }
+.record-btn::after { content: ''; position: absolute; top: 50%; left: 50%;
+                     transform: translate(-50%, -50%); width: 24px; height: 24px;
+                     background: #ef4444; border-radius: 50%; transition: all 0.3s; }
+.record-btn.recording { border-color: #ef4444; animation: pulse-ring 1.5s infinite; }
+.record-btn.recording::after { border-radius: 4px; width: 20px; height: 20px; }
+@keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+                        50% { box-shadow: 0 0 0 12px rgba(239,68,68,0); } }
+.status-text { font-size: 0.9rem; color: #64748b; }
+.status-text.recording { color: #ef4444; }
+.transcript { width: 100%; max-width: 800px; padding: 1rem 2rem 4rem; flex: 1; }
+.live-seg { padding: 0.5rem; margin: 0.25rem 0; border-radius: 6px;
+            border-left: 3px solid #38bdf8; background: #111d2b; }
+.live-seg .time { color: #64748b; font-size: 0.8rem; font-family: monospace; }
+.live-seg .text { margin-top: 0.25rem; line-height: 1.5; }
+.live-seg.partial { opacity: 0.6; border-left-color: #64748b; }
+.timer { font-family: monospace; font-size: 1.2rem; color: #38bdf8; }
+</style>
+</head>
+<body>
+<div class="header">
+  <a href="/">← Главная</a>
+  <h1>Живая транскрибация</h1>
+</div>
+<div class="controls">
+  <select id="langSelect">
+    <option value="">Авто</option>
+    <option value="ru" selected>Русский</option>
+    <option value="en">English</option>
+    <option value="uk">Українська</option>
+    <option value="de">Deutsch</option>
+  </select>
+  <button class="record-btn" id="recordBtn" onclick="toggleRecording()"></button>
+  <div>
+    <div class="status-text" id="statusText">Нажми для записи</div>
+    <div class="timer" id="timer">00:00</div>
+  </div>
+</div>
+<div class="transcript" id="transcript"></div>
+
+<script>
+let recording = false;
+let ws = null;
+let mediaStream = null;
+let audioCtx = null;
+let processor = null;
+let startTime = 0;
+let timerInterval = null;
+
+const recordBtn = document.getElementById('recordBtn');
+const statusText = document.getElementById('statusText');
+const timerEl = document.getElementById('timer');
+const transcriptEl = document.getElementById('transcript');
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+async function toggleRecording() {
+  if (recording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) {
+    statusText.textContent = 'Нет доступа к микрофону';
+    return;
+  }
+
+  const lang = document.getElementById('langSelect').value;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/transcribe?language=${lang}`);
+
+  ws.onmessage = (e) => {
+    const seg = JSON.parse(e.data);
+    addSegment(seg);
+  };
+  ws.onerror = () => { statusText.textContent = 'Ошибка соединения'; };
+  ws.onclose = () => { if (recording) stopRecording(); };
+
+  // Wait for WS to open
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve;
+    setTimeout(reject, 5000);
+  });
+
+  audioCtx = new AudioContext({ sampleRate: 16000 });
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+
+  // ScriptProcessor for simplicity (AudioWorklet requires HTTPS in some browsers)
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  processor.onaudioprocess = (e) => {
+    if (!recording || ws.readyState !== WebSocket.OPEN) return;
+    const float32 = e.inputBuffer.getChannelData(0);
+    const int16 = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32768)));
+    }
+    ws.send(int16.buffer);
+  };
+  source.connect(processor);
+  processor.connect(audioCtx.destination);
+
+  recording = true;
+  recordBtn.classList.add('recording');
+  statusText.textContent = 'Запись...';
+  statusText.classList.add('recording');
+  startTime = Date.now();
+  timerInterval = setInterval(() => {
+    timerEl.textContent = fmtTime((Date.now() - startTime) / 1000);
+  }, 500);
+}
+
+function stopRecording() {
+  recording = false;
+  recordBtn.classList.remove('recording');
+  statusText.textContent = 'Остановлено';
+  statusText.classList.remove('recording');
+  clearInterval(timerInterval);
+
+  if (processor) { processor.disconnect(); processor = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (ws && ws.readyState === WebSocket.OPEN) { ws.close(); ws = null; }
+}
+
+function addSegment(seg) {
+  const div = document.createElement('div');
+  div.className = 'live-seg' + (seg.is_partial ? ' partial' : '');
+  div.innerHTML = `<span class="time">${fmtTime(seg.start)}</span>
+                   <div class="text">${seg.text}</div>`;
+  transcriptEl.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+</script>
+</body>
+</html>

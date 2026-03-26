@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASVO — Просмотр транскрипта</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0a0f1a; color: #e0e0e0; }
+.header { padding: 1rem 2rem; background: #111827; border-bottom: 1px solid #1e293b;
+          display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.header h1 { color: #38bdf8; font-size: 1.2rem; }
+.header a { color: #38bdf8; text-decoration: none; font-size: 0.9rem; }
+.player-wrap { position: sticky; top: 0; z-index: 10; background: #111827;
+               padding: 0.75rem 2rem; border-bottom: 1px solid #1e293b; }
+audio { width: 100%; height: 40px; }
+.toolbar { padding: 0.5rem 2rem; background: #0d1520; display: flex; gap: 0.5rem;
+           align-items: center; flex-wrap: wrap; border-bottom: 1px solid #1e293b; }
+.toolbar button, .toolbar select {
+    background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.85rem; }
+.toolbar button:hover { background: #334155; }
+.toolbar .save-btn { background: #22c55e; color: #0a0f1a; font-weight: 600; border: none; }
+.toolbar .save-btn:hover { background: #16a34a; }
+.toolbar .save-btn.dirty { animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.7; } }
+.transcript { padding: 1rem 2rem 4rem; max-width: 900px; margin: 0 auto; }
+.segment { padding: 0.75rem; margin: 0.25rem 0; border-radius: 8px; cursor: pointer;
+           transition: background 0.2s; border-left: 3px solid transparent; }
+.segment:hover { background: #111d2b; }
+.segment.active { background: #111d2b; border-left-color: #38bdf8; }
+.seg-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+.seg-time { color: #64748b; font-size: 0.8rem; font-family: monospace; cursor: pointer; }
+.seg-speaker { font-weight: 600; font-size: 0.9rem; }
+.seg-speaker[contenteditable]:focus { outline: 1px solid #38bdf8; border-radius: 3px; padding: 0 4px; }
+.seg-text { font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; }
+.seg-text[contenteditable]:focus { outline: 1px solid #38bdf8; border-radius: 3px; padding: 2px 4px; }
+.speaker-c0 { color: #38bdf8; } .speaker-c1 { color: #f87171; }
+.speaker-c2 { color: #4ade80; } .speaker-c3 { color: #c084fc; }
+.speaker-c4 { color: #fb923c; } .speaker-c5 { color: #2dd4bf; }
+.search-bar { padding: 0.5rem 2rem; background: #0d1520; border-bottom: 1px solid #1e293b; }
+.search-bar input { width: 100%; background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
+                    border-radius: 6px; padding: 8px 12px; font-size: 0.9rem; }
+mark { background: #854d0e; color: #fef08a; border-radius: 2px; }
+.no-data { text-align: center; padding: 4rem; color: #64748b; }
+</style>
+</head>
+<body>
+<div class="header">
+  <a href="/">← Главная</a>
+  <h1 id="title">Транскрипт</h1>
+  <span id="meta" style="color:#64748b;font-size:0.85rem;"></span>
+</div>
+<div class="player-wrap"><audio id="audio" controls preload="auto"></audio></div>
+<div class="toolbar">
+  <button onclick="toggleEdit()" id="editBtn">Редактировать</button>
+  <button class="save-btn" id="saveBtn" style="display:none;" onclick="saveEdits()">Сохранить</button>
+  <span style="flex:1;"></span>
+  <select id="translateLang" style="max-width:150px;">
+    <option value="">Перевести...</option>
+    <option value="en">English</option>
+    <option value="ru">Русский</option>
+    <option value="uk">Українська</option>
+    <option value="de">Deutsch</option>
+    <option value="fr">Français</option>
+    <option value="es">Español</option>
+    <option value="zh">中文</option>
+    <option value="ja">日本語</option>
+  </select>
+  <button onclick="requestTranslation()">Перевести</button>
+  <span style="flex:1;"></span>
+  <a href="" id="dlDocx" download style="color:#38bdf8;font-size:0.85rem;">DOCX</a>
+  <a href="" id="dlTxt" download style="color:#38bdf8;font-size:0.85rem;">TXT</a>
+  <a href="" id="dlSrt" download style="color:#38bdf8;font-size:0.85rem;">SRT</a>
+</div>
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="Поиск по транскрипту..." oninput="filterSegments()">
+</div>
+<div class="transcript" id="transcript"></div>
+
+<script>
+const TASK_ID = location.pathname.split('/').pop();
+const audio = document.getElementById('audio');
+const transcriptEl = document.getElementById('transcript');
+let segments = [];
+let editing = false;
+let dirty = false;
+let speakerColors = {};
+let colorIdx = 0;
+
+function getSpeakerClass(speaker) {
+  if (!(speaker in speakerColors)) speakerColors[speaker] = colorIdx++ % 6;
+  return 'speaker-c' + speakerColors[speaker];
+}
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+           : `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+async function load() {
+  try {
+    const resp = await fetch(`/api/transcript/${TASK_ID}`);
+    if (!resp.ok) { transcriptEl.innerHTML = '<div class="no-data">Транскрипт не найден</div>'; return; }
+    const data = await resp.json();
+    segments = data.segments || [];
+    document.getElementById('title').textContent = data.title || data.file_name || 'Транскрипт';
+    document.getElementById('meta').textContent =
+      `${(data.duration/60).toFixed(0)} мин | ${(data.speakers||[]).length} спикеров | ${data.language || ''}`;
+    audio.src = `/api/audio/${TASK_ID}`;
+    document.getElementById('dlDocx').href = `/api/result/${TASK_ID}/docx`;
+    document.getElementById('dlTxt').href = `/api/result/${TASK_ID}/txt`;
+    document.getElementById('dlSrt').href = `/api/result/${TASK_ID}/srt`;
+    render();
+  } catch(e) {
+    transcriptEl.innerHTML = `<div class="no-data">Ошибка: ${e.message}</div>`;
+  }
+}
+
+function render(filter) {
+  transcriptEl.innerHTML = '';
+  segments.forEach((seg, i) => {
+    if (filter && !seg.text.toLowerCase().includes(filter)) return;
+    const div = document.createElement('div');
+    div.className = 'segment';
+    div.dataset.idx = i;
+    div.dataset.start = seg.start;
+    div.dataset.end = seg.end;
+    const sc = getSpeakerClass(seg.speaker);
+    const conf = seg.confidence !== undefined ? seg.confidence : 1.0;
+    const confColor = conf >= 0.7 ? '#22c55e' : conf >= 0.4 ? '#eab308' : '#ef4444';
+    const confTitle = `Уверенность: ${(conf*100).toFixed(0)}%`;
+    div.innerHTML = `
+      <div class="seg-header">
+        <span class="seg-time" onclick="seekTo(${seg.start})">${fmtTime(seg.start)}</span>
+        <span class="seg-speaker ${sc}" data-field="speaker" ${editing ? 'contenteditable="true"' : ''}>${seg.speaker}</span>
+        <span title="${confTitle}" style="width:8px;height:8px;border-radius:50%;background:${confColor};display:inline-block;"></span>
+      </div>
+      <div class="seg-text" data-field="text" ${editing ? 'contenteditable="true"' : ''} style="${conf < 0.4 ? 'opacity:0.6;border-left:2px solid #ef4444;padding-left:6px;' : ''}">${seg.text}</div>`;
+    div.addEventListener('click', (e) => {
+      if (!editing && !e.target.classList.contains('seg-time')) seekTo(seg.start);
+    });
+    if (editing) {
+      div.querySelectorAll('[contenteditable]').forEach(el => {
+        el.addEventListener('input', () => { dirty = true; updateDirty(); });
+      });
+    }
+    transcriptEl.appendChild(div);
+  });
+}
+
+function seekTo(t) { audio.currentTime = t; audio.play(); }
+
+audio.addEventListener('timeupdate', () => {
+  const t = audio.currentTime;
+  document.querySelectorAll('.segment').forEach(div => {
+    const s = parseFloat(div.dataset.start);
+    const e = parseFloat(div.dataset.end);
+    if (t >= s && t < e) {
+      if (!div.classList.contains('active')) {
+        document.querySelectorAll('.segment.active').forEach(d => d.classList.remove('active'));
+        div.classList.add('active');
+        div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  });
+});
+
+function toggleEdit() {
+  editing = !editing;
+  document.getElementById('editBtn').textContent = editing ? 'Отменить' : 'Редактировать';
+  document.getElementById('saveBtn').style.display = editing ? '' : 'none';
+  if (!editing) { dirty = false; updateDirty(); }
+  render();
+}
+
+function updateDirty() {
+  const btn = document.getElementById('saveBtn');
+  btn.classList.toggle('dirty', dirty);
+}
+
+async function saveEdits() {
+  // Собираем данные из DOM
+  const divs = document.querySelectorAll('.segment');
+  const updated = [];
+  divs.forEach(div => {
+    const idx = parseInt(div.dataset.idx);
+    const speaker = div.querySelector('[data-field="speaker"]').textContent.trim();
+    const text = div.querySelector('[data-field="text"]').textContent.trim();
+    updated.push({
+      start: segments[idx].start,
+      end: segments[idx].end,
+      speaker: speaker,
+      text: text,
+    });
+  });
+
+  try {
+    const resp = await fetch(`/api/transcript/${TASK_ID}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({segments: updated}),
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      segments = updated;
+      dirty = false; updateDirty();
+      alert('Сохранено! Файлы экспорта обновлены.');
+    } else {
+      alert('Ошибка: ' + (data.message || 'unknown'));
+    }
+  } catch(e) { alert('Ошибка: ' + e.message); }
+}
+
+async function requestTranslation() {
+  const lang = document.getElementById('translateLang').value;
+  if (!lang) return;
+  const fd = new FormData();
+  fd.append('target_language', lang);
+  try {
+    const resp = await fetch(`/api/translate/${TASK_ID}`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    alert(data.status === 'queued' ? `Перевод на ${lang} поставлен в очередь` : 'Ошибка');
+  } catch(e) { alert('Ошибка: ' + e.message); }
+}
+
+function filterSegments() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  render(q || null);
+}
+
+load();
+</script>
+</body>
+</html>

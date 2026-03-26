@@ -1,9 +1,11 @@
 services:
   redis:
     image: "redis:alpine"
-  
+
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "0.0.0.0:8001:8000"
     deploy:
@@ -14,7 +16,25 @@ services:
               count: 1
               capabilities: [gpu]
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
-      - ./data:/app/data
+      - ./data:/data
     depends_on:
       - redis
+
+  bot:
+    build: ./bot
+    env_file: .env
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - HTTP_PROXY=http://10.20.0.1:8888
+      - HTTPS_PROXY=http://10.20.0.1:8888
+      - NO_PROXY=backend,redis,localhost,127.0.0.1,10.20.205.15
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/bot:/app/data
+    depends_on:
+      - backend
+    restart: unless-stopped

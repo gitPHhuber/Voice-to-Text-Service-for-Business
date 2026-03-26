@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASVO-Transcriber</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0a0f1a; color: #e0e0e0; min-height: 100vh;
+       display: flex; justify-content: center; align-items: center; }
+.container { max-width: 600px; width: 100%; padding: 2rem; }
+h1 { color: #38bdf8; margin-bottom: 0.5rem; font-size: 1.8rem; }
+.subtitle { color: #666; margin-bottom: 2rem; }
+.upload-zone { border: 2px dashed #334155; border-radius: 12px;
+               padding: 3rem 2rem; text-align: center; cursor: pointer;
+               transition: all 0.3s; margin-bottom: 1.5rem; }
+.upload-zone:hover { border-color: #38bdf8; background: #0d1520; }
+.upload-zone.dragover { border-color: #38bdf8; background: #111d2b; }
+input[type="file"] { display: none; }
+.btn { background: #38bdf8; color: #0a0f1a; border: none; padding: 12px 24px;
+       border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;
+       width: 100%; transition: opacity 0.2s; }
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+           margin-bottom: 1.5rem; }
+.option { display: flex; align-items: center; gap: 0.5rem; }
+.option input { accent-color: #38bdf8; }
+.status { margin-top: 1.5rem; padding: 1rem; border-radius: 8px;
+          background: #111d2b; display: none; }
+.status.show { display: block; }
+.status.error { border-left: 3px solid #ef4444; }
+.status.success { border-left: 3px solid #22c55e; }
+.status.pending { border-left: 3px solid #38bdf8; }
+a { color: #38bdf8; }
+.files { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.files a { display: block; padding: 8px 12px; background: #1e293b;
+           border-radius: 6px; text-decoration: none; }
+.files a:hover { background: #334155; }
+.progress-wrap { background: #1e293b; border-radius: 8px; height: 28px;
+                 margin: 0.75rem 0; overflow: hidden; position: relative; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+                border-radius: 8px; transition: width 0.5s ease;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 0.8rem; font-weight: 600; color: #0a0f1a;
+                min-width: 2.5rem; }
+.step-label { color: #94a3b8; font-size: 0.85rem; margin-top: 0.25rem; }
+.steps { display: flex; gap: 0.25rem; margin: 0.75rem 0; }
+.steps .dot { width: 8px; height: 8px; border-radius: 50%; background: #334155;
+              transition: background 0.3s; }
+.steps .dot.active { background: #38bdf8; }
+.steps .dot.done { background: #22c55e; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>ASVO-Transcriber</h1>
+  <p class="subtitle">Транскрибация и диаризация аудио/видео</p>
+  <div style="margin-bottom:1rem;display:flex;gap:1.5rem;">
+    <a href="/live" style="color:#38bdf8;font-size:0.9rem;">🎙 Живая транскрибация →</a>
+    <a href="/history" style="color:#38bdf8;font-size:0.9rem;">📚 История →</a>
+  </div>
+  <div class="upload-zone" id="dropZone" onclick="fileInput.click()">
+    <p style="font-size:2rem;margin-bottom:0.5rem;">📁</p>
+    <p>Перетащи файлы сюда или нажми для выбора</p>
+    <p style="color:#666;margin-top:0.5rem;font-size:0.85rem;">
+      mp3, wav, ogg, m4a, mp4, webm, mkv — до 500 МБ
+    </p>
+    <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.wav,.ogg,.m4a,.mp4,.webm,.mkv" multiple>
+  </div>
+  <div id="fileList" style="margin-bottom:1rem;color:#38bdf8;font-size:0.9rem;"></div>
+  <div class="options">
+    <label class="option">
+      <select id="language" style="background:#1e293b;color:#e0e0e0;border:1px solid #334155;border-radius:4px;padding:4px 8px;">
+        <option value="">Авто-определение</option>
+        <option value="ru" selected>Русский</option>
+        <option value="en">English</option>
+        <option value="uk">Українська</option>
+        <option value="de">Deutsch</option>
+        <option value="fr">Français</option>
+        <option value="es">Español</option>
+        <option value="zh">中文</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="ar">العربية</option>
+        <option value="pt">Português</option>
+        <option value="it">Italiano</option>
+        <option value="pl">Polski</option>
+        <option value="tr">Türkçe</option>
+        <option value="kk">Қазақша</option>
+      </select>
+    </label>
+    <label class="option"><input type="checkbox" id="diarize" checked> Диаризация</label>
+    <label class="option"><input type="checkbox" id="summarize" checked> Суммаризация</label>
+    <label class="option">
+      <select id="summaryTemplate" style="background:#1e293b;color:#e0e0e0;border:1px solid #334155;border-radius:4px;padding:4px 8px;">
+        <option value="meeting">Встреча</option>
+        <option value="standup">Стендап</option>
+        <option value="interview">Интервью</option>
+        <option value="lecture">Лекция</option>
+        <option value="negotiation">Переговоры</option>
+        <option value="brainstorm">Мозговой штурм</option>
+      </select>
+    </label>
+  </div>
+  <button class="btn" id="submitBtn" disabled onclick="upload()">Транскрибировать</button>
+  <div class="status" id="status"></div>
+</div>
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const submitBtn = document.getElementById('submitBtn');
+const statusEl = document.getElementById('status');
+const fileListEl = document.getElementById('fileList');
+let selectedFiles = [];
+
+function updateFileList() {
+  if (!selectedFiles.length) { fileListEl.innerHTML = ''; submitBtn.disabled = true; return; }
+  const totalMB = selectedFiles.reduce((s, f) => s + f.size, 0) / 1024 / 1024;
+  fileListEl.innerHTML = selectedFiles.map((f, i) =>
+    `${f.name} (${(f.size/1024/1024).toFixed(1)} МБ)`
+  ).join('<br>') + `<br><small>Всего: ${selectedFiles.length} файл(ов), ${totalMB.toFixed(1)} МБ</small>`;
+  submitBtn.disabled = false;
+}
+
+fileInput.addEventListener('change', (e) => {
+  selectedFiles = Array.from(e.target.files);
+  updateFileList();
+});
+
+['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, (ev) => {
+  ev.preventDefault(); dropZone.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(e => dropZone.addEventListener(e, (ev) => {
+  ev.preventDefault(); dropZone.classList.remove('dragover');
+}));
+dropZone.addEventListener('drop', (e) => {
+  selectedFiles = Array.from(e.dataTransfer.files);
+  updateFileList();
+});
+
+async function upload() {
+  if (!selectedFiles.length) return;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Загрузка...';
+  statusEl.className = 'status show pending';
+
+  const taskIds = [];
+  for (let i = 0; i < selectedFiles.length; i++) {
+    statusEl.innerHTML = `⏳ Загрузка ${i+1}/${selectedFiles.length}: ${selectedFiles[i].name}`;
+    const fd = new FormData();
+    fd.append('file', selectedFiles[i]);
+    fd.append('language', document.getElementById('language').value);
+    fd.append('diarize', document.getElementById('diarize').checked);
+    fd.append('summarize', document.getElementById('summarize').checked);
+    fd.append('summary_template', document.getElementById('summaryTemplate').value);
+    try {
+      const resp = await fetch('/api/transcribe', { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+      taskIds.push({ id: data.task_id, name: selectedFiles[i].name });
+    } catch (e) {
+      taskIds.push({ id: null, name: selectedFiles[i].name, error: e.message });
+    }
+  }
+
+  // Show all tasks with individual polling
+  statusEl.innerHTML = '';
+  taskIds.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'status show pending';
+    div.style.marginTop = '0.5rem';
+    div.id = 'task-' + (t.id || 'err-' + Math.random());
+    if (t.error) {
+      div.className = 'status show error';
+      div.innerHTML = `❌ ${t.name}: ${t.error}`;
+    } else {
+      div.innerHTML = `🔄 ${t.name} (${t.id})...`;
+      pollTask(t.id, t.name, div);
+    }
+    statusEl.appendChild(div);
+  });
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Транскрибировать';
+}
+
+async function cancelTask(taskId, el) {
+  try {
+    await fetch(`/api/cancel/${taskId}`, { method: 'POST' });
+    el.className = 'status show error';
+    el.innerHTML = `⛔ Отменено`;
+  } catch(e) { alert('Ошибка отмены: ' + e.message); }
+}
+
+function pollTask(taskId, fileName, el) {
+  const poll = async () => {
+    try {
+      const resp = await fetch(`/api/status/${taskId}`);
+      const data = await resp.json();
+      if (data.status === 'done') {
+        el.className = 'status show success';
+        const d = data.data || {};
+        el.innerHTML = `✅ ${fileName}
+          <div class="files" style="margin-top:0.5rem;">
+            <a href="/view/${taskId}" style="background:#0ea5e9;color:#fff;font-weight:600;">▶ Открыть</a>
+            <a href="/api/result/${taskId}/docx" download>📄 DOCX</a>
+            <a href="/api/result/${taskId}/txt" download>📝 TXT</a>
+          </div>`;
+        return;
+      }
+      if (data.status === 'error') {
+        el.className = 'status show error';
+        el.innerHTML = `❌ ${fileName}: ${data.message}`;
+        return;
+      }
+      if (data.status === 'cancelled') {
+        el.className = 'status show error';
+        el.innerHTML = `⛔ ${fileName}: отменено`;
+        return;
+      }
+      const pct = data.progress || 0;
+      el.innerHTML = `🔄 ${fileName} — ${pct}% ${data.message || ''} <button onclick="cancelTask('${taskId}',this.parentElement)" style="margin-left:8px;background:#ef4444;color:#fff;border:none;border-radius:4px;padding:2px 10px;cursor:pointer;font-size:0.85rem;">Отмена</button>`;
+      setTimeout(poll, 3000);
+    } catch(e) { setTimeout(poll, 5000); }
+  };
+  setTimeout(poll, 2000);
+}
+
+const STEP_NAMES = {
+  init: 'Инициализация', prepare: 'Подготовка аудио',
+  transcribe: 'Транскрибация', diarize: 'Диаризация',
+  postprocess: 'Постобработка', summarize: 'Суммаризация', done: 'Готово'
+};
+const STEP_ORDER = ['prepare','transcribe','diarize','postprocess','summarize'];
+
+function renderProgress(pct, step, message) {
+  const dots = STEP_ORDER.map(s => {
+    const idx = STEP_ORDER.indexOf(s);
+    const curIdx = STEP_ORDER.indexOf(step);
+    let cls = 'dot';
+    if (curIdx > idx) cls += ' done';
+    else if (s === step) cls += ' active';
+    return `<div class="${cls}" title="${STEP_NAMES[s] || s}"></div>`;
+  }).join('');
+  return `
+    <div style="margin-bottom:0.5rem;font-weight:600;">${STEP_NAMES[step] || step}</div>
+    <div class="progress-wrap">
+      <div class="progress-bar" style="width:${Math.max(pct,3)}%">${pct}%</div>
+    </div>
+    <div class="steps">${dots}</div>
+    <div class="step-label">${message}</div>`;
+}
+
+async function pollStatus(taskId) {
+  const poll = async () => {
+    try {
+      const resp = await fetch(`/api/status/${taskId}`);
+      const data = await resp.json();
+
+      if (data.status === 'done') {
+        statusEl.className = 'status show success';
+        const d = data.data || {};
+        statusEl.innerHTML = `
+          ${renderProgress(100, 'done', 'Обработка завершена')}
+          <div style="margin-top:1rem;">
+          ⏱ ${(d.duration/60).toFixed(0)} мин | 👥 ${(d.speakers||[]).length} спикеров |
+          ⚡ ${(d.processing_time).toFixed(0)}с<br>
+          ${d.summary ? '<br>📋 ' + d.summary.substring(0,300) + '...<br>' : ''}
+          </div>
+          <div class="files">
+            <a href="/view/${taskId}" style="background:#0ea5e9;color:#fff;font-weight:600;">▶ Открыть с плеером</a>
+            <a href="/api/result/${taskId}/docx" download>📄 Скачать DOCX</a>
+            <a href="/api/result/${taskId}/txt" download>📝 Скачать TXT</a>
+            <a href="/api/result/${taskId}/json" download>📊 Скачать JSON</a>
+            <a href="/api/result/${taskId}/srt" download>🎬 Скачать SRT</a>
+          </div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Транскрибировать';
+        return;
+      }
+
+      if (data.status === 'error') {
+        statusEl.className = 'status show error';
+        statusEl.innerHTML = `❌ Ошибка: ${data.message}`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Транскрибировать';
+        return;
+      }
+
+      statusEl.className = 'status show pending';
+      const pct = data.progress || 0;
+      const step = data.step || 'init';
+      const msg = data.message || 'Обработка...';
+      statusEl.innerHTML = renderProgress(pct, step, msg);
+      setTimeout(poll, 2000);
+    } catch (e) {
+      setTimeout(poll, 5000);
+    }
+  };
+  setTimeout(poll, 1500);
+}
+</script>
+</body>
+</html>

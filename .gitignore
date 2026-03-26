@@ -1,6 +1,8 @@
 *.pyc
-pycache/
+__pycache__/
 .env
 venv/
 data/
-EOF
+old_service/
+*.db
+*.npy

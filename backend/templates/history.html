@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASVO — История</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #0a0f1a; color: #e0e0e0; min-height: 100vh; }
+.header { padding: 1rem 2rem; background: #111827; border-bottom: 1px solid #1e293b;
+          display: flex; align-items: center; gap: 1rem; }
+.header h1 { color: #38bdf8; font-size: 1.2rem; }
+.header a { color: #38bdf8; text-decoration: none; }
+.content { max-width: 900px; margin: 0 auto; padding: 1.5rem 2rem; }
+.search-box { width: 100%; background: #1e293b; color: #e0e0e0; border: 1px solid #334155;
+              border-radius: 8px; padding: 10px 14px; font-size: 1rem; margin-bottom: 1rem; }
+.card { background: #111d2b; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 0.75rem;
+        border-left: 3px solid #38bdf8; transition: background 0.2s; }
+.card:hover { background: #162032; }
+.card-title { font-weight: 600; color: #38bdf8; font-size: 1rem; }
+.card-meta { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
+.card-summary { color: #94a3b8; font-size: 0.9rem; margin-top: 0.5rem; }
+.card-actions { margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.card-actions a { color: #38bdf8; font-size: 0.85rem; text-decoration: none;
+                  padding: 4px 10px; background: #1e293b; border-radius: 5px; }
+.card-actions a:hover { background: #334155; }
+.empty { text-align: center; color: #64748b; padding: 3rem; }
+.search-results { margin-bottom: 1.5rem; }
+.search-results .seg { padding: 0.5rem; margin: 0.25rem 0; background: #111d2b;
+                       border-radius: 6px; font-size: 0.9rem; }
+.search-results .seg mark { background: #854d0e; color: #fef08a; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <a href="/">← Главная</a>
+  <h1>История транскриптов</h1>
+</div>
+<div class="content">
+  <input class="search-box" id="searchBox" placeholder="Поиск по транскриптам..." oninput="debounceSearch()">
+  <div id="searchResults" class="search-results"></div>
+  <div id="list"></div>
+</div>
+<script>
+let searchTimer;
+function debounceSearch() {
+  clearTimeout(searchTimer);
+  const q = document.getElementById('searchBox').value.trim();
+  if (!q) { document.getElementById('searchResults').innerHTML = ''; return; }
+  searchTimer = setTimeout(() => doSearch(q), 400);
+}
+
+async function doSearch(q) {
+  const el = document.getElementById('searchResults');
+  try {
+    const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=10`);
+    const data = await resp.json();
+    if (!data.results.length) { el.innerHTML = '<div class="empty">Ничего не найдено</div>'; return; }
+    el.innerHTML = '<h3 style="color:#38bdf8;margin-bottom:0.5rem;">Результаты поиска</h3>' +
+      data.results.map(r => `<div class="seg">
+        <a href="/view/${r.task_id}" style="color:#38bdf8;">${r.title || r.task_id}</a>
+        <span style="color:#64748b;"> ${r.speaker}:</span> ${r.snippet || r.text}
+      </div>`).join('');
+  } catch(e) { el.innerHTML = ''; }
+}
+
+async function loadHistory() {
+  const el = document.getElementById('list');
+  try {
+    const resp = await fetch('/api/transcripts?limit=50');
+    const data = await resp.json();
+    if (!data.transcripts.length) { el.innerHTML = '<div class="empty">Пока нет транскриптов</div>'; return; }
+    el.innerHTML = data.transcripts.map(t => {
+      const dur = t.duration ? `${(t.duration/60).toFixed(0)} мин` : '';
+      const spk = (t.speakers||[]).length;
+      const date = t.created_at ? t.created_at.substring(0, 10) : '';
+      return `<div class="card">
+        <div class="card-title">${t.title || t.file_name || t.task_id}</div>
+        <div class="card-meta">${date} | ${dur} | ${spk} спикеров | ${t.language || ''}</div>
+        ${t.summary ? '<div class="card-summary">' + t.summary + '</div>' : ''}
+        <div class="card-actions">
+          <a href="/view/${t.task_id}">▶ Открыть</a>
+          <a href="/api/result/${t.task_id}/docx" download>DOCX</a>
+          <a href="/api/result/${t.task_id}/txt" download>TXT</a>
+          <a href="/api/result/${t.task_id}/srt" download>SRT</a>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<div class="empty">Ошибка: ${e.message}</div>`; }
+}
+
+loadHistory();
+</script>
+</body>
+</html>

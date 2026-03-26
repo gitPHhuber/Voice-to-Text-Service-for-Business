@@ -10,11 +10,22 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip
 ENV PATH="/opt/venv/bin:${PATH}"
 
-COPY requirements.txt .
+WORKDIR /app
+
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app
-WORKDIR /app
-RUN chmod +x /app/processing_scripts/documenting.sh
+# Copy app package (core library)
+COPY app/ /app/app/
 
-CMD ["bash", "-c", "celery -A tasks.app worker --loglevel=info -P solo & uvicorn main:app --host 0.0.0.0 --port 8000"]
+# Copy backend code
+COPY backend/ /app/backend/
+COPY backend/processing_scripts/ /app/processing_scripts/
+
+# Create data dirs
+RUN mkdir -p /data/uploads /data/outputs /data/voice_samples
+
+WORKDIR /app/backend
+ENV PYTHONPATH="/app:${PYTHONPATH}"
+
+CMD ["bash", "-c", "celery -A app.tasks.app worker --loglevel=info -P solo & uvicorn main:app --host 0.0.0.0 --port 8000"]
