@@ -78,6 +78,19 @@ def init_db():
             END;
         """)
 
+        # Activity log for admin stats
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL DEFAULT '',
+                username TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL DEFAULT '',
+                task_id TEXT NOT NULL DEFAULT '',
+                details TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT ''
+            )
+        """)
+
         # Migration: add confidence column if missing
         cols = [r[1] for r in conn.execute("PRAGMA table_info(segments)").fetchall()]
         if "confidence" not in cols:
@@ -211,3 +224,72 @@ def update_segments(task_id: str, segments: list[dict]):
                 for s in segments
             ],
         )
+
+
+# ======================================================================
+# ACTIVITY LOG & ADMIN STATS
+# ======================================================================
+
+
+def log_activity(user_id: str, username: str, action: str, task_id: str = "", details: str = ""):
+    """Записать действие пользователя."""
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO activity_log (user_id, username, action, task_id, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (str(user_id), username, action, task_id, details, datetime.now().isoformat()),
+        )
+
+
+def get_activity_log(limit: int = 50) -> list[dict]:
+    """Последние действия пользователей."""
+    with _db() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id, username, action, task_id, details, created_at
+            FROM activity_log
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_user_stats() -> list[dict]:
+    """Статистика по пользователям: кол-во действий, последняя активность."""
+    with _db() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                user_id,
+                username,
+                COUNT(*) as total_actions,
+                SUM(CASE WHEN action = 'transcribe' THEN 1 ELSE 0 END) as transcriptions,
+                SUM(CASE WHEN action = 'translate' THEN 1 ELSE 0 END) as translations,
+                SUM(CASE WHEN action = 'search' THEN 1 ELSE 0 END) as searches,
+                SUM(CASE WHEN action = 'download' THEN 1 ELSE 0 END) as downloads,
+                MAX(created_at) as last_active
+            FROM activity_log
+            GROUP BY user_id
+            ORDER BY last_active DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_overall_stats() -> dict:
+    """Общая статистика сервиса."""
+    with _db() as conn:
+        t_count = conn.execute("SELECT COUNT(*) FROM transcripts").fetchone()[0]
+        t_duration = conn.execute("SELECT COALESCE(SUM(duration), 0) FROM transcripts").fetchone()[0]
+        t_proc = conn.execute("SELECT COALESCE(SUM(processing_time), 0) FROM transcripts").fetchone()[0]
+        a_count = conn.execute("SELECT COUNT(DISTINCT user_id) FROM activity_log").fetchone()[0]
+        return {
+            "total_transcripts": t_count,
+            "total_audio_hours": round(t_duration / 3600, 1),
+            "total_processing_hours": round(t_proc / 3600, 1),
+            "unique_users": a_count,
+        }

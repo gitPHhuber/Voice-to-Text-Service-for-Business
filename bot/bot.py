@@ -762,29 +762,33 @@ async def admin_panel_cmd(
 async def admin_panel_inline(query, context):
     users = load_users()
     pending = {uid: u for uid, u in users.items() if u.get("status") == 0}
-    back = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
-    )
-    if not pending:
-        await query.edit_message_text(
-            "Нет пользователей, ожидающих авторизации.",
-            reply_markup=back,
-        )
-        return
+
     keyboard = []
+    # Pending users
     for uid, info in pending.items():
         uname = info.get("username")
-        label = (
-            f"✅ Авторизовать @{uname}" if uname else f"✅ Авторизовать ID {uid}"
-        )
+        label = f"✅ @{uname}" if uname else f"✅ ID {uid}"
         keyboard.append(
             [InlineKeyboardButton(label, callback_data=f"approve_{uid}")]
         )
+
+    # Admin actions
+    keyboard.append(
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")]
+    )
+    keyboard.append(
+        [InlineKeyboardButton("📋 Лог действий", callback_data="admin_activity")]
+    )
+    keyboard.append(
+        [InlineKeyboardButton("👥 Все пользователи", callback_data="admin_users")]
+    )
     keyboard.append(
         [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
     )
+
+    pending_text = f"\n⏳ Ожидают авторизации: {len(pending)}" if pending else ""
     await query.edit_message_text(
-        "Пользователи, ожидающие авторизации:",
+        f"👑 Админ-панель{pending_text}",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
@@ -984,6 +988,24 @@ async def callback_query_handler(
             await query.edit_message_text("Нет прав.")
             return
         await admin_panel_inline(query, context)
+        return
+
+    if data == "admin_stats":
+        if not is_admin(uid):
+            return
+        await _show_admin_stats(query, context)
+        return
+
+    if data == "admin_activity":
+        if not is_admin(uid):
+            return
+        await _show_admin_activity(query, context)
+        return
+
+    if data == "admin_users":
+        if not is_admin(uid):
+            return
+        await _show_admin_users(query, context)
         return
 
     if data == "back_to_menu":
@@ -1199,6 +1221,91 @@ async def _show_speakers_inline(query, context):
         await query.edit_message_text(f"❌ {e}", reply_markup=back_kb)
 
 
+async def _show_admin_stats(query, context):
+    admin_kb = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔙 Админ-панель", callback_data="menu_admin")]]
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{BACKEND_URL}/api/admin/stats")
+        data = r.json()
+        ov = data.get("overall", {})
+        users_stats = data.get("users", [])
+
+        lines = [
+            "📊 <b>Статистика сервиса</b>\n",
+            f"📁 Транскриптов: {ov.get('total_transcripts', 0)}",
+            f"🕐 Аудио обработано: {ov.get('total_audio_hours', 0)} ч",
+            f"⚡ Время обработки: {ov.get('total_processing_hours', 0)} ч",
+            f"👥 Пользователей: {ov.get('unique_users', 0)}",
+            "\n<b>По пользователям:</b>",
+        ]
+        for u in users_stats[:15]:
+            name = u.get("username") or u.get("user_id", "?")
+            tr = u.get("transcriptions", 0)
+            dl = u.get("downloads", 0)
+            last = (u.get("last_active") or "")[:10]
+            lines.append(f"  @{name}: {tr} транскр., {dl} скач. ({last})")
+
+        await query.edit_message_text(
+            "\n".join(lines), parse_mode="HTML", reply_markup=admin_kb
+        )
+    except Exception as e:
+        await query.edit_message_text(f"❌ {e}", reply_markup=admin_kb)
+
+
+async def _show_admin_activity(query, context):
+    admin_kb = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔙 Админ-панель", callback_data="menu_admin")]]
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(f"{BACKEND_URL}/api/admin/activity", params={"limit": 20})
+        activity = r.json().get("activity", [])
+        if not activity:
+            await query.edit_message_text("📋 Нет действий", reply_markup=admin_kb)
+            return
+
+        ACTION_EMOJI = {
+            "transcribe": "📝", "translate": "🌐", "search": "🔍",
+            "download": "📥", "start": "🟢", "speaker_add": "🎤",
+        }
+        lines = ["📋 <b>Последние действия</b>\n"]
+        for a in activity:
+            emoji = ACTION_EMOJI.get(a.get("action", ""), "▪️")
+            name = a.get("username") or a.get("user_id", "?")
+            action = a.get("action", "?")
+            details = a.get("details", "")
+            time = (a.get("created_at") or "")[11:16]
+            date = (a.get("created_at") or "")[:10]
+            line = f"{emoji} {date} {time} @{name}: {action}"
+            if details:
+                line += f" — {details[:40]}"
+            lines.append(line)
+
+        await query.edit_message_text(
+            "\n".join(lines), parse_mode="HTML", reply_markup=admin_kb
+        )
+    except Exception as e:
+        await query.edit_message_text(f"❌ {e}", reply_markup=admin_kb)
+
+
+async def _show_admin_users(query, context):
+    admin_kb = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔙 Админ-панель", callback_data="menu_admin")]]
+    )
+    users = load_users()
+    STATUS_NAMES = {0: "⏳ ожидание", 1: "✅ активен", 2: "👑 админ"}
+    lines = ["👥 <b>Все пользователи</b>\n"]
+    for uid, info in users.items():
+        name = info.get("username", "?")
+        status = STATUS_NAMES.get(info.get("status", 0), "?")
+        lines.append(f"  {status} @{name} (ID: {uid})")
+    await query.edit_message_text(
+        "\n".join(lines), parse_mode="HTML", reply_markup=admin_kb
+    )
+
+
 # ======================================================================
 # TRANSCRIPTION CORE
 # ======================================================================
@@ -1258,6 +1365,16 @@ async def start_transcription_flow(
         logger.exception("File download failed")
         await status_msg.edit_text(f"❌ Ошибка скачивания файла: {e}")
         return
+
+    # log activity
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            await c.post(f"{BACKEND_URL}/api/log", json={
+                "user_id": uid, "username": update.effective_user.username or "",
+                "action": "transcribe", "details": ud.get("file_name", ""),
+            })
+    except Exception:
+        pass
 
     # send to backend
     await status_msg.edit_text("📤 Файл принят. Отправляю в сервис…")

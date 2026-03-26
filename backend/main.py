@@ -16,7 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
 from app.tasks import app as celery_app, transcribe_task, translate_task
-from app.db import init_db, search as db_search, list_transcripts, get_transcript, update_segments
+from app.db import (
+    init_db, search as db_search, list_transcripts, get_transcript, update_segments,
+    log_activity, get_activity_log, get_user_stats, get_overall_stats,
+)
 from app.speakers import list_speakers, save_voice_sample, delete_speaker
 
 ALLOWED_MODELS = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]
@@ -288,6 +291,38 @@ async def api_audio(task_id: str):
     if candidates:
         return FileResponse(str(candidates[0]))
     raise HTTPException(status_code=404, detail="Audio not found")
+
+
+# ======================================================================
+# ADMIN STATS
+# ======================================================================
+
+@app.post("/api/log")
+async def api_log_activity(data: dict):
+    """Записать действие пользователя (вызывается ботом)."""
+    log_activity(
+        user_id=str(data.get("user_id", "")),
+        username=str(data.get("username", "")),
+        action=str(data.get("action", "")),
+        task_id=str(data.get("task_id", "")),
+        details=str(data.get("details", "")),
+    )
+    return {"status": "ok"}
+
+
+@app.get("/api/admin/stats")
+async def api_admin_stats():
+    """Статистика для админ-панели."""
+    return {
+        "overall": get_overall_stats(),
+        "users": get_user_stats(),
+    }
+
+
+@app.get("/api/admin/activity")
+async def api_admin_activity(limit: int = Query(50)):
+    """Последние действия пользователей."""
+    return {"activity": get_activity_log(limit)}
 
 
 @app.get("/health")
